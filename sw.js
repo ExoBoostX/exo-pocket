@@ -1,12 +1,9 @@
-const CACHE_NAME = "exo-pocket-v1";
+const CACHE_NAME = "boost-empire-v1";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./manifest.webmanifest"
-  // add icons later if you add them:
-  // "./icons/icon-192.png",
-  // "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
