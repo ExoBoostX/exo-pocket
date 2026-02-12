@@ -10,10 +10,6 @@
 
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css">
-
-  <!-- If you add your own icon later, also add:
-  <link rel="apple-touch-icon" href="icons/icon-180.png">
-  -->
 </head>
 <body>
   <div class="bg"></div>
@@ -27,25 +23,98 @@
       </div>
     </header>
 
+    <!-- Top mini stats -->
     <section class="card">
-      <h2>Quick Actions</h2>
-      <div class="grid">
-        <button class="btn" id="btn1">Open Dashboard</button>
-        <button class="btn" id="btn2">Services</button>
-        <button class="btn" id="btn3">Orders</button>
-        <button class="btn" id="btn4">Settings</button>
+      <h2>Today</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="statLabel">Orders</div>
+          <div class="statValue" id="statOrders">—</div>
+        </div>
+        <div class="stat">
+          <div class="statLabel">Revenue</div>
+          <div class="statValue" id="statRevenue">—</div>
+        </div>
+        <div class="stat">
+          <div class="statLabel">Tickets</div>
+          <div class="statValue" id="statTickets">—</div>
+        </div>
+      </div>
+      <p class="hint">Local demo data for now — later we’ll connect to SellAuth/API/Firestore.</p>
+    </section>
+
+    <!-- Pages -->
+    <section class="card page" data-page="dashboard">
+      <h2>Dashboard</h2>
+
+      <div class="panel">
+        <div class="panelRow">
+          <div>
+            <div class="panelTitle">System Status</div>
+            <div class="panelSub">Payments • Panel • Discord</div>
+          </div>
+          <div class="pill"><span class="dot"></span><span id="statusText">Online</span></div>
+        </div>
+
+        <div class="quick">
+          <button class="btn" data-action="refresh">Refresh</button>
+          <button class="btn" data-action="announce">Post Announcement</button>
+        </div>
+      </div>
+
+      <div class="feed">
+        <div class="feedTitle">Live Activity</div>
+        <div class="feedList" id="activityFeed"></div>
       </div>
     </section>
 
-    <section class="card">
-      <h2>Status</h2>
-      <div class="status">
-        <div class="pill"><span class="dot"></span> Online</div>
-        <div class="pill">Local Mode</div>
-        <div class="pill" id="clock">--:--</div>
-      </div>
-      <p class="hint">This is a starter “app shell”. Next we can add pages, login, Firestore, etc.</p>
+    <section class="card page hidden" data-page="services">
+      <h2>Services</h2>
+
+      <div class="serviceList" id="serviceList"></div>
+
+      <p class="hint">Tap a service to copy a quick sales message for Discord/DMs.</p>
     </section>
+
+    <section class="card page hidden" data-page="orders">
+      <h2>Orders</h2>
+
+      <div class="orderList" id="orderList"></div>
+
+      <p class="hint">Demo orders now. Later we can pull real orders from your store/panel.</p>
+    </section>
+
+    <section class="card page hidden" data-page="settings">
+      <h2>Settings</h2>
+
+      <div class="setting">
+        <div>
+          <div class="panelTitle">Theme</div>
+          <div class="panelSub">Neon Purple / Dark</div>
+        </div>
+        <button class="btn small" data-action="toggleTheme">Toggle Glow</button>
+      </div>
+
+      <div class="setting">
+        <div>
+          <div class="panelTitle">Quick Links</div>
+          <div class="panelSub">Open your sites fast</div>
+        </div>
+        <div class="quick">
+          <a class="btn" href="https://exoboostx.com/" target="_blank" rel="noopener">Panel</a>
+          <a class="btn" href="https://exoboostx.mysellauth.com/" target="_blank" rel="noopener">Shop</a>
+          <a class="btn" href="https://discord.gg/exoboostx" target="_blank" rel="noopener">Discord</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom Nav -->
+    <nav class="nav">
+      <button class="navBtn active" data-go="dashboard">Dashboard</button>
+      <button class="navBtn" data-go="services">Services</button>
+      <button class="navBtn" data-go="orders">Orders</button>
+      <button class="navBtn" data-go="settings">Settings</button>
+    </nav>
 
     <footer class="foot">
       <small>Installed like an app • Works offline</small>
@@ -53,33 +122,128 @@
   </main>
 
   <script>
-    // Register service worker (offline support)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js');
+    // Service worker
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+
+    // Demo data (we’ll swap this with real data later)
+    const services = [
+      { name: "TikTok Followers", tier: "HQ", price: "£2 / 1k", note: "No login required" },
+      { name: "TikTok Likes", tier: "Fast", price: "£0.50 / 1k", note: "No login required" },
+      { name: "TikTok Views", tier: "Stable", price: "£1 / 10k", note: "No login required" },
+      { name: "Instagram Followers", tier: "Mixed", price: "From £0.57 / 1k", note: "No login required" },
+      { name: "Netflix Accounts", tier: "4K", price: "From £2", note: "Instant delivery" },
+      { name: "Spotify Premium", tier: "3 months", price: "£2", note: "New accounts recommended" }
+    ];
+
+    const orders = [
+      { id: "#EXO-1021", item: "TikTok Followers 5k", status: "Completed", time: "Today 14:12" },
+      { id: "#EXO-1022", item: "Netflix 4K (3mo)", status: "Processing", time: "Today 15:05" },
+      { id: "#EXO-1023", item: "Instagram Followers 2k", status: "Pending", time: "Today 16:20" }
+    ];
+
+    const activity = [
+      "✅ Order #EXO-1021 completed (TikTok Followers 5k)",
+      "🟣 New site visit from Instagram",
+      "💬 Ticket opened in Discord: “Payment help”",
+      "🟢 Panel API responding normally"
+    ];
+
+    // Stats (demo)
+    document.getElementById('statOrders').textContent = "3";
+    document.getElementById('statRevenue').textContent = "£6.50";
+    document.getElementById('statTickets').textContent = "1";
+
+    // Render services
+    const serviceList = document.getElementById('serviceList');
+    serviceList.innerHTML = services.map(s => `
+      <button class="row" data-copy="${encodeURIComponent(s.name)}">
+        <div class="rowLeft">
+          <div class="rowTitle">${s.name}</div>
+          <div class="rowSub">${s.tier} • ${s.note}</div>
+        </div>
+        <div class="rowRight">${s.price}</div>
+      </button>
+    `).join("");
+
+    // Copy quick pitch on tap
+    serviceList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.row');
+      if (!btn) return;
+      const name = decodeURIComponent(btn.dataset.copy);
+      const msg =
+`🚀 ${name} available on EXO BoostX
+⚡ Fast delivery • No login required (where applicable)
+🛒 Order here: https://exoboostx.com/
+💬 Support: https://discord.gg/exoboostx`;
+
+      try {
+        await navigator.clipboard.writeText(msg);
+        toast("Copied sales message ✅");
+      } catch {
+        toast("Couldn’t copy — iOS clipboard blocked");
+      }
+    });
+
+    // Render orders
+    const orderList = document.getElementById('orderList');
+    orderList.innerHTML = orders.map(o => `
+      <div class="order">
+        <div>
+          <div class="rowTitle">${o.id} • ${o.item}</div>
+          <div class="rowSub">${o.time}</div>
+        </div>
+        <div class="badge ${o.status.toLowerCase()}">${o.status}</div>
+      </div>
+    `).join("");
+
+    // Render activity
+    const feed = document.getElementById('activityFeed');
+    feed.innerHTML = activity.map(a => `<div class="feedItem">${a}</div>`).join("");
+
+    // Navigation
+    const pages = document.querySelectorAll('.page');
+    const navBtns = document.querySelectorAll('.navBtn');
+
+    function go(page) {
+      pages.forEach(p => p.classList.toggle('hidden', p.dataset.page !== page));
+      navBtns.forEach(b => b.classList.toggle('active', b.dataset.go === page));
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
-    // Simple clock
-    const clock = document.getElementById('clock');
-    const tick = () => {
-      const d = new Date();
-      clock.textContent = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    };
-    tick(); setInterval(tick, 1000);
+    navBtns.forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
 
-    // Demo buttons
-    const toast = (msg) => {
+    // Actions
+    document.body.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-action]');
+      if (!a) return;
+      const act = a.dataset.action;
+
+      if (act === "refresh") {
+        toast("Refreshed ✅ (demo)");
+      } else if (act === "announce") {
+        toast("Announcement draft copied ✅");
+        const msg =
+`📣 EXO BoostX Update
+✅ Fast, cheap services live now
+🔥 TikTok + Instagram boosts
+🛒 https://exoboostx.com/
+💬 https://discord.gg/exoboostx`;
+        navigator.clipboard?.writeText(msg).catch(()=>{});
+      } else if (act === "toggleTheme") {
+        document.documentElement.classList.toggle('lowGlow');
+        toast("Theme toggled ✨");
+      }
+    });
+
+    // Toast
+    function toast(msg) {
       const t = document.createElement('div');
       t.className = 'toast';
       t.textContent = msg;
       document.body.appendChild(t);
       setTimeout(() => t.classList.add('show'), 10);
       setTimeout(() => { t.classList.remove('show'); setTimeout(()=>t.remove(), 250); }, 1600);
-    };
-
-    document.getElementById('btn1').onclick = () => toast('Dashboard (coming next)');
-    document.getElementById('btn2').onclick = () => toast('Services (coming next)');
-    document.getElementById('btn3').onclick = () => toast('Orders (coming next)');
-    document.getElementById('btn4').onclick = () => toast('Settings (coming next)');
+    }
   </script>
 </body>
 </html>
