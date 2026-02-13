@@ -13,18 +13,34 @@
 </head>
 <body>
   <div class="bg"></div>
+  <div class="gridGlow"></div>
 
   <main class="wrap">
-    <header class="top">
-      <div class="logo">EXO</div>
-      <div class="title">
-        <h1>EXO AI Assistant</h1>
-        <p class="sub">Invite-only access</p>
+
+    <header class="hero">
+      <div class="brand">
+        <div class="mark">EXO</div>
+        <div class="brandText">
+          <div class="brandTitle">EXO AI Assistant</div>
+          <div class="brandSub">
+            <span class="dotLive"></span>
+            <span id="liveText">Online</span>
+            <span class="sep">•</span>
+            Invite-only Beta
+          </div>
+        </div>
+      </div>
+
+      <div class="chips" id="modeChips">
+        <button class="chip active" data-mode="Growth">Growth</button>
+        <button class="chip" data-mode="Content">Content</button>
+        <button class="chip" data-mode="Sales">Sales</button>
+        <button class="chip" data-mode="Support">Support</button>
       </div>
     </header>
 
     <!-- INVITE GATE -->
-    <section class="card" id="gateCard">
+    <section class="card gate" id="gateCard">
       <h2>Enter invite code</h2>
       <p class="hint">You need a valid invite code to use the assistant.</p>
 
@@ -44,36 +60,40 @@
     </section>
 
     <!-- APP -->
-    <section class="card hidden" id="appCard">
-      <div class="outTop">
-        <h2>Chat</h2>
+    <section class="card app hidden" id="appCard">
+      <div class="appTop">
+        <div class="pill">
+          <span class="miniDot"></span>
+          <span id="pillMode">Mode: Growth</span>
+        </div>
         <button class="btnSmall" id="logoutBtn">Remove invite</button>
       </div>
 
       <div class="chat" id="chat"></div>
 
       <div class="composer">
-        <input id="msg" placeholder="Ask anything…" />
-        <button class="btnPrimary" id="sendBtn">Send</button>
+        <input id="msg" placeholder="Ask EXO…" />
+        <button class="send" id="sendBtn" aria-label="Send">
+          <span>Send</span>
+          <span class="sendArrow">➜</span>
+        </button>
       </div>
 
-      <div class="hint" id="statusLine"></div>
+      <div class="statusLine" id="statusLine"></div>
     </section>
 
     <footer class="foot">
-      <small>Powered by your backend • Don’t share your invite</small>
+      <small>Neon synthwave UI • Private access • Backend secured</small>
     </footer>
   </main>
 
   <script>
-    // PWA offline shell
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
 
-    // 🔧 IMPORTANT: put your Worker URL here (example):
-    // const API_BASE = "https://exo-ai.yourname.workers.dev";
     const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
 
     const KEY_INVITE = "exo_invite_code";
+    const KEY_MODE = "exo_mode";
 
     const gateCard = document.getElementById("gateCard");
     const appCard = document.getElementById("appCard");
@@ -83,6 +103,25 @@
     const chat = document.getElementById("chat");
     const msg = document.getElementById("msg");
     const statusLine = document.getElementById("statusLine");
+    const pillMode = document.getElementById("pillMode");
+
+    const modeChips = document.getElementById("modeChips");
+
+    let currentMode = localStorage.getItem(KEY_MODE) || "Growth";
+
+    function setMode(mode){
+      currentMode = mode;
+      localStorage.setItem(KEY_MODE, mode);
+      pillMode.textContent = `Mode: ${mode}`;
+      [...modeChips.querySelectorAll(".chip")].forEach(c => c.classList.toggle("active", c.dataset.mode === mode));
+    }
+    setMode(currentMode);
+
+    modeChips.addEventListener("click", (e) => {
+      const b = e.target.closest(".chip");
+      if (!b) return;
+      setMode(b.dataset.mode);
+    });
 
     function showGate(err="") {
       gateCard.classList.remove("hidden");
@@ -96,12 +135,56 @@
       statusLine.textContent = "";
     }
 
+    function esc(s){ return (s ?? "").toString(); }
+
     function addBubble(text, who="ai") {
-      const div = document.createElement("div");
-      div.className = "bubble " + who;
-      div.textContent = text;
-      chat.appendChild(div);
+      const wrap = document.createElement("div");
+      wrap.className = `bubbleWrap ${who}`;
+
+      const b = document.createElement("div");
+      b.className = `bubble ${who}`;
+      b.textContent = text;
+
+      wrap.appendChild(b);
+
+      // actions on AI bubble
+      if (who === "ai") {
+        const actions = document.createElement("div");
+        actions.className = "bubbleActions";
+
+        const copy = document.createElement("button");
+        copy.className = "act";
+        copy.textContent = "Copy";
+        copy.onclick = async () => {
+          try { await navigator.clipboard.writeText(text); toast("Copied ✅"); }
+          catch { toast("Copy blocked on iOS"); }
+        };
+
+        actions.appendChild(copy);
+        wrap.appendChild(actions);
+      }
+
+      chat.appendChild(wrap);
       chat.scrollTop = chat.scrollHeight;
+      return wrap;
+    }
+
+    function addTyping() {
+      const wrap = document.createElement("div");
+      wrap.className = "bubbleWrap ai";
+      wrap.id = "typing";
+
+      const b = document.createElement("div");
+      b.className = "bubble ai typing";
+      b.innerHTML = `<span class="td"></span><span class="td"></span><span class="td"></span>`;
+      wrap.appendChild(b);
+
+      chat.appendChild(wrap);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    function removeTyping() {
+      const t = document.getElementById("typing");
+      if (t) t.remove();
     }
 
     async function validateInvite(code) {
@@ -110,22 +193,26 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code })
       });
-      if (!res.ok) {
-        const t = await res.text().catch(()=> "");
-        throw new Error(t || "Invalid code");
-      }
+      if (!res.ok) throw new Error("Invalid code");
       return res.json();
     }
 
     async function sendToAI(promptText) {
       const code = localStorage.getItem(KEY_INVITE) || "";
+      // Simple “mode” steering without changing backend:
+      const preface =
+        currentMode === "Growth" ? "You are a growth strategist. Give actionable steps.\n\n" :
+        currentMode === "Content" ? "You are a content creator assistant. Provide hooks, captions, and structure.\n\n" :
+        currentMode === "Sales" ? "You are a sales assistant. Provide DM scripts, offers, and closing lines.\n\n" :
+        "You are a support assistant. Be clear, calm, and step-by-step.\n\n";
+
       const res = await fetch(API_BASE + "/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Invite": code
         },
-        body: JSON.stringify({ prompt: promptText })
+        body: JSON.stringify({ prompt: preface + promptText })
       });
 
       if (!res.ok) {
@@ -144,8 +231,8 @@
         await validateInvite(code);
         localStorage.setItem(KEY_INVITE, code);
         showApp();
-        addBubble("Access granted. What do you want help with?", "ai");
-      } catch (e) {
+        addBubble("Invite verified. What are we building today?", "ai");
+      } catch {
         showGate("That code didn’t work (or it’s expired).");
       }
     };
@@ -166,14 +253,17 @@
       msg.value = "";
 
       addBubble(text, "me");
-      statusLine.textContent = "Thinking…";
+      statusLine.textContent = "EXO is thinking…";
+      addTyping();
 
       try {
         const data = await sendToAI(text);
+        removeTyping();
         addBubble(data.answer || "(No answer returned)", "ai");
         statusLine.textContent = "";
       } catch (e) {
-        statusLine.textContent = "Error: " + (e.message || "Request failed");
+        removeTyping();
+        statusLine.textContent = "Error: " + esc(e.message || "Request failed").slice(0, 120);
         if ((e.message || "").toLowerCase().includes("invite")) {
           showGate("Invite rejected. Enter a valid code.");
         }
@@ -185,11 +275,20 @@
       if (e.key === "Enter") handleSend();
     });
 
+    function toast(msgText){
+      const t = document.createElement("div");
+      t.className = "toast";
+      t.textContent = msgText;
+      document.body.appendChild(t);
+      setTimeout(()=>t.classList.add("show"), 10);
+      setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 250); }, 1200);
+    }
+
     // boot
     const existing = localStorage.getItem(KEY_INVITE);
     if (existing) {
       showApp();
-      addBubble("Welcome back. Ask me anything.", "ai");
+      addBubble("Welcome back. Pick a mode and ask away.", "ai");
     } else {
       showGate("");
     }

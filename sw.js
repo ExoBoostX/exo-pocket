@@ -1,4 +1,4 @@
-const CACHE_NAME = "exo-ai-invite-v1";
+const CACHE_NAME = "exo-ai-ui-v2";
 const ASSETS = ["./","./index.html","./style.css","./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
