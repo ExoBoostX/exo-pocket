@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0014" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>EXO Caption Lab</title>
+  <title>EXO AI Assistant</title>
 
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css">
@@ -18,396 +18,181 @@
     <header class="top">
       <div class="logo">EXO</div>
       <div class="title">
-        <h1>Caption Lab</h1>
-        <p class="sub">Hooks • Captions • Hashtags • CTAs</p>
+        <h1>EXO AI Assistant</h1>
+        <p class="sub">Invite-only access</p>
       </div>
     </header>
 
-    <section class="card">
-      <h2>Build your prompt</h2>
+    <!-- INVITE GATE -->
+    <section class="card" id="gateCard">
+      <h2>Enter invite code</h2>
+      <p class="hint">You need a valid invite code to use the assistant.</p>
 
       <div class="form">
         <label class="field">
-          <span>Platform</span>
-          <select id="platform">
-            <option value="TikTok">TikTok</option>
-            <option value="Instagram">Instagram</option>
-            <option value="Etsy">Etsy</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Niche</span>
-          <input id="niche" placeholder="e.g., Small business, fitness, gaming, beauty…" />
-        </label>
-
-        <label class="field">
-          <span>Topic / Product</span>
-          <input id="topic" placeholder="e.g., 'cheap hoodie drop' or 'Instagram followers deal'" />
-        </label>
-
-        <div class="row2">
-          <label class="field">
-            <span>Tone</span>
-            <select id="tone">
-              <option value="Confident">Confident</option>
-              <option value="Friendly">Friendly</option>
-              <option value="Funny">Funny</option>
-              <option value="Luxury">Luxury</option>
-              <option value="Hype">Hype</option>
-              <option value="Calm">Calm</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Goal</span>
-            <select id="goal">
-              <option value="Engagement">Engagement</option>
-              <option value="Sales">Sales</option>
-              <option value="Followers">Followers</option>
-              <option value="Clicks">Clicks</option>
-            </select>
-          </label>
-        </div>
-
-        <label class="field">
-          <span>Link (optional)</span>
-          <input id="link" placeholder="e.g., https://your-site.com" />
+          <span>Invite code</span>
+          <input id="inviteInput" placeholder="e.g. EXO-7F3K-92Q" autocapitalize="characters" />
         </label>
 
         <div class="actions">
-          <button class="btnPrimary" id="generateBtn">Generate</button>
-          <button class="btnGhost" id="randomBtn">Random idea</button>
+          <button class="btnPrimary" id="unlockBtn">Unlock</button>
+          <button class="btnGhost" id="clearBtn">Clear</button>
         </div>
+
+        <div class="error" id="gateError"></div>
       </div>
     </section>
 
-    <section class="card hidden" id="outCard">
+    <!-- APP -->
+    <section class="card hidden" id="appCard">
       <div class="outTop">
-        <h2>Your results</h2>
-        <button class="btnSmall" id="copyAllBtn">Copy all</button>
+        <h2>Chat</h2>
+        <button class="btnSmall" id="logoutBtn">Remove invite</button>
       </div>
 
-      <div class="tabs">
-        <button class="tab active" data-tab="hooks">Hooks</button>
-        <button class="tab" data-tab="captions">Captions</button>
-        <button class="tab" data-tab="hashtags">Hashtags</button>
-        <button class="tab" data-tab="ctas">CTAs</button>
+      <div class="chat" id="chat"></div>
+
+      <div class="composer">
+        <input id="msg" placeholder="Ask anything…" />
+        <button class="btnPrimary" id="sendBtn">Send</button>
       </div>
 
-      <div class="panel" id="hooksPanel"></div>
-      <div class="panel hidden" id="captionsPanel"></div>
-      <div class="panel hidden" id="hashtagsPanel"></div>
-      <div class="panel hidden" id="ctasPanel"></div>
-
-      <p class="hint">Tap any line to copy it. Everything works offline.</p>
+      <div class="hint" id="statusLine"></div>
     </section>
 
     <footer class="foot">
-      <small>Public tool • Installable on iPhone • Offline</small>
+      <small>Powered by your backend • Don’t share your invite</small>
     </footer>
   </main>
 
   <script>
+    // PWA offline shell
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
 
-    const $ = (id) => document.getElementById(id);
+    // 🔧 IMPORTANT: put your Worker URL here (example):
+    // const API_BASE = "https://exo-ai.yourname.workers.dev";
+    const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
 
-    const platformEl = $("platform");
-    const nicheEl = $("niche");
-    const topicEl = $("topic");
-    const toneEl = $("tone");
-    const goalEl = $("goal");
-    const linkEl = $("link");
+    const KEY_INVITE = "exo_invite_code";
 
-    const outCard = $("outCard");
-    const hooksPanel = $("hooksPanel");
-    const captionsPanel = $("captionsPanel");
-    const hashtagsPanel = $("hashtagsPanel");
-    const ctasPanel = $("ctasPanel");
+    const gateCard = document.getElementById("gateCard");
+    const appCard = document.getElementById("appCard");
+    const inviteInput = document.getElementById("inviteInput");
+    const gateError = document.getElementById("gateError");
 
-    const safe = (s) => (s || "").trim();
-    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-    const clamp = (s, n) => (s.length > n ? s.slice(0, n) : s);
+    const chat = document.getElementById("chat");
+    const msg = document.getElementById("msg");
+    const statusLine = document.getElementById("statusLine");
 
-    const randomNiches = ["Small business", "Fitness", "Gaming", "Beauty", "Food", "Music", "Motivation", "Streetwear"];
-    const randomTopics = ["new drop", "limited offer", "behind the scenes", "how-to tips", "before/after", "3 mistakes people make", "quick tutorial"];
-
-    function vibe(tone) {
-      const map = {
-        "Confident": { emojis:["💥","✅","🔥","🚀"], words:["real","simple","proven","fast"], style:"confident" },
-        "Friendly": { emojis:["✨","🙂","💛","🌿"], words:["easy","quick","helpful","real"], style:"friendly" },
-        "Funny": { emojis:["😂","🫡","😅","🤝"], words:["lowkey","honestly","plot twist","no cap"], style:"funny" },
-        "Luxury": { emojis:["🖤","✨","🕯️","💎"], words:["premium","clean","exclusive","elevated"], style:"luxury" },
-        "Hype": { emojis:["🔥","⚡","🚀","💣"], words:["insane","crazy","viral","next-level"], style:"hype" },
-        "Calm": { emojis:["☁️","🧘","🌙","🫶"], words:["gentle","steady","clear","simple"], style:"calm" }
-      };
-      return map[tone] || map["Confident"];
+    function showGate(err="") {
+      gateCard.classList.remove("hidden");
+      appCard.classList.add("hidden");
+      gateError.textContent = err;
+    }
+    function showApp() {
+      gateCard.classList.add("hidden");
+      appCard.classList.remove("hidden");
+      gateError.textContent = "";
+      statusLine.textContent = "";
     }
 
-    function buildContext() {
-      const platform = platformEl.value;
-      const niche = clamp(safe(nicheEl.value) || "Creators", 40);
-      const topic = clamp(safe(topicEl.value) || "my latest post", 50);
-      const tone = toneEl.value;
-      const goal = goalEl.value;
-      const link = clamp(safe(linkEl.value), 120);
-      const v = vibe(tone);
-      return { platform, niche, topic, tone, goal, link, v };
-    }
-
-    function generateHooks(ctx) {
-      const { platform, niche, topic, goal, v } = ctx;
-      const starters = [
-        `If you're in ${niche}, stop doing this…`,
-        `This is how ${niche} wins on ${platform}:`,
-        `3 things I wish I knew about ${topic}:`,
-        `POV: you finally take ${goal.toLowerCase()} seriously…`,
-        `The ${v.words[0]} way to level up ${topic}:`,
-        `I tried ${topic} for 7 days. Here's what happened:`,
-        `Hot take: most people in ${niche} are missing this:`,
-        `Save this — it’ll fix your ${topic}:`,
-        `The reason your ${topic} isn’t working:`,
-        `Do THIS before you post about ${topic}:`
-      ];
-      return shuffle(starters).slice(0, 10).map(s => `${pick(v.emojis)} ${s}`);
-    }
-
-    function generateCaptions(ctx) {
-      const { platform, niche, topic, tone, goal, link, v } = ctx;
-
-      const cta = goal === "Sales" ? "DM me “INFO”" :
-                  goal === "Clicks" ? "Tap the link" :
-                  goal === "Followers" ? "Follow for more" :
-                  "Comment “ME”";
-
-      const endings = [
-        `${pick(v.emojis)} ${cta}.`,
-        `${pick(v.emojis)} Save this for later.`,
-        `${pick(v.emojis)} Want the template? ${cta}.`,
-        `${pick(v.emojis)} Be honest — have you tried this?`,
-        `${pick(v.emojis)} Drop a ✅ if you want part 2.`
-      ];
-
-      const base = [
-        `Here’s the ${v.words[0]} truth about ${topic} for ${niche}.`,
-        `If you’re posting about ${topic}, do this first: (1) hook (2) value (3) CTA.`,
-        `Quick win: simplify your ${topic} message to ONE clear promise.`,
-        `You don’t need more content — you need better positioning for ${topic}.`,
-        `Stop overthinking ${topic}. Start doing this consistently.`
-      ];
-
-      const platformFlavor =
-        platform === "Etsy" ? [
-          `Listing tip: lead with benefits, not features — especially for ${topic}.`,
-          `Etsy buyers scan. Make your first line instantly clear about ${topic}.`,
-          `Use keywords naturally. Don’t keyword-stuff your ${topic} listing.`
-        ] :
-        platform === "Instagram" ? [
-          `IG tip: first line = hook. Keep it punchy for ${topic}.`,
-          `Carousel idea: 1) Pain 2) Fix 3) Proof 4) CTA for ${topic}.`,
-          `Stories: run a poll related to ${topic} then DM responders.`
-        ] : [
-          `TikTok tip: open with conflict/curiosity about ${topic} in 1 second.`,
-          `Show proof fast. Even a quick screen clip helps ${topic} convert.`,
-          `Pin a comment with your CTA for ${topic}.`
-        ];
-
-      const captions = shuffle([...base, ...platformFlavor]).slice(0, 8).map(line => {
-        const ending = pick(endings);
-        const maybeLink = link ? `\n${link}` : "";
-        return `${line}\n\n${ending}${maybeLink}`;
-      });
-
-      // add 2 more “tone” specific
-      const toneLines = tone === "Funny"
-        ? [
-            `Me: “I’ll just post once.” Also me: obsessed with ${topic} 😅\n\n${pick(endings)}`,
-            `If ${topic} had a cheat code, it’s literally this.\n\n${pick(endings)}`
-          ]
-        : tone === "Luxury"
-        ? [
-            `An elevated approach to ${topic}: clarity, consistency, and a clean offer.\n\n${pick(endings)}`,
-            `Premium doesn’t mean complicated. It means intentional — especially with ${topic}.\n\n${pick(endings)}`
-          ]
-        : [
-            `Here’s a ${v.words[0]} framework for ${topic}: Hook → Value → Proof → CTA.\n\n${pick(endings)}`,
-            `Consistency beats intensity. Pick one angle for ${topic} and repeat it.\n\n${pick(endings)}`
-          ];
-
-      return [...captions, ...toneLines].slice(0, 10);
-    }
-
-    function generateHashtags(ctx) {
-      const { platform, niche, topic } = ctx;
-      const clean = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim().split(/\s+/).slice(0, 4).join("");
-
-      const n = clean(niche) || "creator";
-      const t = clean(topic) || "tips";
-
-      const packs =
-        platform === "Etsy"
-          ? [`#etsy #etsyseller #smallbusiness #handmade`, `#etsytips #etsysuccess #shopowner #productivity`]
-          : platform === "Instagram"
-          ? [`#instagramtips #contentcreator #smallbusiness #marketing`, `#reels #reelsinstagram #branding #socialmediamarketing`]
-          : [`#tiktoktips #contentcreator #viral #marketing`, `#fyp #foryou #growth #socialmediatips`];
-
-      const custom = [
-        `#${n} #${n}tips #${n}life`,
-        `#${t} #${t}tips #${t}strategy`
-      ];
-
-      const extras = [
-        `#entrepreneur #sidehustle #businessgrowth #digitalmarketing`,
-        `#contentstrategy #creatorlife #branding #socialmedia`,
-        `#onlinebusiness #makemoneyonline #marketingtips #smallbiz`
-      ];
-
-      return shuffle([...packs, ...custom, ...extras]).slice(0, 6).join("\n");
-    }
-
-    function generateCTAs(ctx) {
-      const { goal, link, v } = ctx;
-      const base =
-        goal === "Sales" ? [
-          `DM me “INFO” and I’ll send details.`,
-          `Want the deal? Comment “DEAL”.`,
-          `Reply “YES” and I’ll message you.`,
-          `Limited spots today — message me now.`
-        ] :
-        goal === "Clicks" ? [
-          `Tap the link and check it out.`,
-          `Link in bio — don’t overthink it.`,
-          `Open the link and pick your option.`,
-          `Click through and let me know what you choose.`
-        ] :
-        goal === "Followers" ? [
-          `Follow for daily tips.`,
-          `Follow — I’m posting a part 2 tomorrow.`,
-          `Hit follow if this helped.`,
-          `Follow and save this for later.`
-        ] : [
-          `Comment “ME” and I’ll reply with the template.`,
-          `Drop a ✅ if you want the next step.`,
-          `What’s your biggest struggle? Comment below.`,
-          `Save this and tag someone who needs it.`
-        ];
-
-      const spiced = base.map(s => `${pick(v.emojis)} ${s}${link ? `\n${link}` : ""}`);
-      return shuffle(spiced).slice(0, 10);
-    }
-
-    function shuffle(a) {
-      const arr = [...a];
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
-      return arr;
-    }
-
-    function lineCard(text) {
-      const div = document.createElement("button");
-      div.className = "line";
-      div.type = "button";
+    function addBubble(text, who="ai") {
+      const div = document.createElement("div");
+      div.className = "bubble " + who;
       div.textContent = text;
-      div.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          toast("Copied ✅");
-        } catch {
-          toast("Copy blocked on iOS");
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function validateInvite(code) {
+      const res = await fetch(API_BASE + "/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code })
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(()=> "");
+        throw new Error(t || "Invalid code");
+      }
+      return res.json();
+    }
+
+    async function sendToAI(promptText) {
+      const code = localStorage.getItem(KEY_INVITE) || "";
+      const res = await fetch(API_BASE + "/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Invite": code
+        },
+        body: JSON.stringify({ prompt: promptText })
+      });
+
+      if (!res.ok) {
+        const t = await res.text().catch(()=> "");
+        throw new Error(t || "Request failed");
+      }
+      return res.json();
+    }
+
+    document.getElementById("unlockBtn").onclick = async () => {
+      const code = (inviteInput.value || "").trim().toUpperCase();
+      if (!code) return showGate("Enter an invite code.");
+
+      gateError.textContent = "Checking…";
+      try {
+        await validateInvite(code);
+        localStorage.setItem(KEY_INVITE, code);
+        showApp();
+        addBubble("Access granted. What do you want help with?", "ai");
+      } catch (e) {
+        showGate("That code didn’t work (or it’s expired).");
+      }
+    };
+
+    document.getElementById("clearBtn").onclick = () => {
+      inviteInput.value = "";
+      gateError.textContent = "";
+    };
+
+    document.getElementById("logoutBtn").onclick = () => {
+      localStorage.removeItem(KEY_INVITE);
+      showGate("Invite removed.");
+    };
+
+    async function handleSend() {
+      const text = (msg.value || "").trim();
+      if (!text) return;
+      msg.value = "";
+
+      addBubble(text, "me");
+      statusLine.textContent = "Thinking…";
+
+      try {
+        const data = await sendToAI(text);
+        addBubble(data.answer || "(No answer returned)", "ai");
+        statusLine.textContent = "";
+      } catch (e) {
+        statusLine.textContent = "Error: " + (e.message || "Request failed");
+        if ((e.message || "").toLowerCase().includes("invite")) {
+          showGate("Invite rejected. Enter a valid code.");
         }
-      });
-      return div;
+      }
     }
 
-    function toast(msg) {
-      const t = document.createElement('div');
-      t.className = 'toast';
-      t.textContent = msg;
-      document.body.appendChild(t);
-      setTimeout(() => t.classList.add('show'), 10);
-      setTimeout(() => { t.classList.remove('show'); setTimeout(()=>t.remove(), 250); }, 1300);
+    document.getElementById("sendBtn").onclick = handleSend;
+    msg.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleSend();
+    });
+
+    // boot
+    const existing = localStorage.getItem(KEY_INVITE);
+    if (existing) {
+      showApp();
+      addBubble("Welcome back. Ask me anything.", "ai");
+    } else {
+      showGate("");
     }
-
-    function renderAll(ctx) {
-      const hooks = generateHooks(ctx);
-      const captions = generateCaptions(ctx);
-      const hashtags = generateHashtags(ctx);
-      const ctas = generateCTAs(ctx);
-
-      hooksPanel.innerHTML = "";
-      captionsPanel.innerHTML = "";
-      hashtagsPanel.innerHTML = "";
-      ctasPanel.innerHTML = "";
-
-      hooks.forEach(h => hooksPanel.appendChild(lineCard(h)));
-      captions.forEach(c => captionsPanel.appendChild(lineCard(c)));
-      ctas.forEach(c => ctasPanel.appendChild(lineCard(c)));
-
-      const hashBox = document.createElement("div");
-      hashBox.className = "hashBox";
-      hashBox.textContent = hashtags;
-      hashBox.addEventListener("click", async () => {
-        try { await navigator.clipboard.writeText(hashtags); toast("Hashtags copied ✅"); }
-        catch { toast("Copy blocked on iOS"); }
-      });
-      hashtagsPanel.appendChild(hashBox);
-
-      outCard.classList.remove("hidden");
-
-      $("copyAllBtn").onclick = async () => {
-        const block =
-`Platform: ${ctx.platform}
-Niche: ${ctx.niche}
-Topic: ${ctx.topic}
-Tone: ${ctx.tone}
-Goal: ${ctx.goal}
-${ctx.link ? `Link: ${ctx.link}\n` : ""}
-
-HOOKS
-- ${hooks.join("\n- ")}
-
-CAPTIONS
-- ${captions.join("\n\n- ")}
-
-HASHTAGS
-${hashtags}
-
-CTAS
-- ${ctas.join("\n- ")}`;
-        try { await navigator.clipboard.writeText(block); toast("Copied all ✅"); }
-        catch { toast("Copy blocked on iOS"); }
-      };
-    }
-
-    // Tabs
-    document.querySelectorAll(".tab").forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        const tab = btn.dataset.tab;
-        [hooksPanel, captionsPanel, hashtagsPanel, ctasPanel].forEach(p => p.classList.add("hidden"));
-        if (tab === "hooks") hooksPanel.classList.remove("hidden");
-        if (tab === "captions") captionsPanel.classList.remove("hidden");
-        if (tab === "hashtags") hashtagsPanel.classList.remove("hidden");
-        if (tab === "ctas") ctasPanel.classList.remove("hidden");
-      });
-    });
-
-    $("generateBtn").addEventListener("click", () => {
-      const ctx = buildContext();
-      renderAll(ctx);
-      toast("Generated ✨");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-
-    $("randomBtn").addEventListener("click", () => {
-      nicheEl.value = pick(randomNiches);
-      topicEl.value = pick(randomTopics);
-      toast("Randomised 🎲");
-    });
   </script>
 </body>
 </html>
