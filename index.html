@@ -112,6 +112,32 @@
 
     const KEY_INVITE = "exo_invite_code";
 
+const PRESETS = [
+  { id:"none", label:"Normal", preface:"" },
+
+  { id:"support", label:"Support Reply", preface:
+    "Write a helpful customer support reply for ExoBoostX. Be polite, clear, and reassure the customer. Ask 1–2 key questions if needed.\n\n" },
+
+  { id:"service", label:"Service Explainer", preface:
+    "Explain the ExoBoostX service in a clear, trustworthy way (what it is, what the customer provides, what they receive, typical delivery expectations). Avoid making unrealistic promises.\n\n" },
+
+  { id:"discord", label:"Discord Post", preface:
+    "Write a Discord-ready post for ExoBoostX using clean formatting (headings, bullets, emojis). Keep it short and professional.\n\n" },
+
+  { id:"faq", label:"FAQ Answer", preface:
+    "Answer as ExoBoostX AI. Provide an FAQ-style response, include steps if relevant, and end with a quick next action.\n\n" },
+
+  { id:"policy", label:"Policy/Refund", preface:
+    "Write a clear ExoBoostX policy message (refunds, delivery, replacements). Keep it fair, specific, and easy to understand.\n\n" },
+
+  { id:"offer", label:"Offer Copy", preface:
+    "Write promotional copy for ExoBoostX that is trustworthy and compliant. No spammy wording. Include a CTA.\n\n" },
+
+  { id:"onboard", label:"New Customer Onboarding", preface:
+    "Create a short onboarding message for a new ExoBoostX customer: steps to order, what info is needed, expectations, and support contact.\n\n" }
+];
+
+
     // History: per invite
     const HISTORY_MAX = 80;
     function historyKey(invite){
