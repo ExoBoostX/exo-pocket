@@ -66,7 +66,11 @@
           <span class="miniDot"></span>
           <span id="pillMode">Mode: Growth</span>
         </div>
-        <button class="btnSmall" id="logoutBtn">Remove invite</button>
+
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btnSmall" id="clearChatBtn">Clear chat</button>
+          <button class="btnSmall" id="logoutBtn">Remove invite</button>
+        </div>
       </div>
 
       <div class="chat" id="chat"></div>
@@ -83,7 +87,7 @@
     </section>
 
     <footer class="foot">
-      <small>Neon synthwave UI • Private access • Backend secured</small>
+      <small>Neon synthwave UI • Private access • Saved locally on device</small>
     </footer>
   </main>
 
@@ -93,27 +97,69 @@
     const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
 
     const KEY_INVITE = "exo_invite_code";
-    const KEY_MODE = "exo_mode";
+    const KEY_MODE   = "exo_mode";
 
-    const gateCard = document.getElementById("gateCard");
-    const appCard = document.getElementById("appCard");
-    const inviteInput = document.getElementById("inviteInput");
-    const gateError = document.getElementById("gateError");
+    const gateCard   = document.getElementById("gateCard");
+    const appCard    = document.getElementById("appCard");
+    const inviteInput= document.getElementById("inviteInput");
+    const gateError  = document.getElementById("gateError");
 
-    const chat = document.getElementById("chat");
-    const msg = document.getElementById("msg");
+    const chat       = document.getElementById("chat");
+    const msg        = document.getElementById("msg");
     const statusLine = document.getElementById("statusLine");
-    const pillMode = document.getElementById("pillMode");
+    const pillMode   = document.getElementById("pillMode");
+    const modeChips  = document.getElementById("modeChips");
 
-    const modeChips = document.getElementById("modeChips");
+    // ---------------------------
+    // Local chat history
+    // - Stored per invite code
+    // - Also stored per mode (optional but nice)
+    // ---------------------------
+    const HISTORY_MAX = 60; // total bubbles stored (me+ai)
+    function historyKey(invite, mode){
+      const safeInvite = (invite || "none").toUpperCase().replace(/[^A-Z0-9\-]/g, "");
+      const safeMode = (mode || "Growth").replace(/[^A-Za-z]/g, "");
+      return `exo_chat_${safeInvite}_${safeMode}`;
+    }
 
+    function loadHistory(invite, mode){
+      try {
+        const raw = localStorage.getItem(historyKey(invite, mode));
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveHistory(invite, mode, arr){
+      try {
+        const trimmed = arr.slice(-HISTORY_MAX);
+        localStorage.setItem(historyKey(invite, mode), JSON.stringify(trimmed));
+      } catch {}
+    }
+
+    function clearHistory(invite, mode){
+      try { localStorage.removeItem(historyKey(invite, mode)); } catch {}
+    }
+
+    // ---------------------------
+    // Mode
+    // ---------------------------
     let currentMode = localStorage.getItem(KEY_MODE) || "Growth";
 
     function setMode(mode){
       currentMode = mode;
       localStorage.setItem(KEY_MODE, mode);
       pillMode.textContent = `Mode: ${mode}`;
-      [...modeChips.querySelectorAll(".chip")].forEach(c => c.classList.toggle("active", c.dataset.mode === mode));
+      [...modeChips.querySelectorAll(".chip")]
+        .forEach(c => c.classList.toggle("active", c.dataset.mode === mode));
+
+      // If user is already inside, re-render history for that mode
+      const invite = localStorage.getItem(KEY_INVITE);
+      if (invite && !appCard.classList.contains("hidden")) {
+        renderHistory(invite, currentMode);
+      }
     }
     setMode(currentMode);
 
@@ -123,6 +169,9 @@
       setMode(b.dataset.mode);
     });
 
+    // ---------------------------
+    // UI state
+    // ---------------------------
     function showGate(err="") {
       gateCard.classList.remove("hidden");
       appCard.classList.add("hidden");
@@ -135,9 +184,19 @@
       statusLine.textContent = "";
     }
 
-    function esc(s){ return (s ?? "").toString(); }
+    function toast(msgText){
+      const t = document.createElement("div");
+      t.className = "toast";
+      t.textContent = msgText;
+      document.body.appendChild(t);
+      setTimeout(()=>t.classList.add("show"), 10);
+      setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 250); }, 1200);
+    }
 
-    function addBubble(text, who="ai") {
+    // ---------------------------
+    // Bubbles
+    // ---------------------------
+    function addBubble(text, who="ai", skipSave=false) {
       const wrap = document.createElement("div");
       wrap.className = `bubbleWrap ${who}`;
 
@@ -147,7 +206,6 @@
 
       wrap.appendChild(b);
 
-      // actions on AI bubble
       if (who === "ai") {
         const actions = document.createElement("div");
         actions.className = "bubbleActions";
@@ -166,6 +224,16 @@
 
       chat.appendChild(wrap);
       chat.scrollTop = chat.scrollHeight;
+
+      // Save to history
+      if (!skipSave) {
+        const invite = localStorage.getItem(KEY_INVITE) || "";
+        if (invite) {
+          const hist = loadHistory(invite, currentMode);
+          hist.push({ who, text, t: Date.now() });
+          saveHistory(invite, currentMode, hist);
+        }
+      }
       return wrap;
     }
 
@@ -182,11 +250,28 @@
       chat.appendChild(wrap);
       chat.scrollTop = chat.scrollHeight;
     }
+
     function removeTyping() {
       const t = document.getElementById("typing");
       if (t) t.remove();
     }
 
+    function renderHistory(invite, mode){
+      chat.innerHTML = "";
+      const hist = loadHistory(invite, mode);
+
+      if (hist.length === 0) {
+        addBubble("Welcome back. Pick a mode and ask away.", "ai", true);
+        return;
+      }
+
+      hist.forEach(m => addBubble(m.text, m.who, true));
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // ---------------------------
+    // API calls
+    // ---------------------------
     async function validateInvite(code) {
       const res = await fetch(API_BASE + "/validate", {
         method: "POST",
@@ -199,7 +284,8 @@
 
     async function sendToAI(promptText) {
       const code = localStorage.getItem(KEY_INVITE) || "";
-      // Simple “mode” steering without changing backend:
+
+      // Mode steering (simple)
       const preface =
         currentMode === "Growth" ? "You are a growth strategist. Give actionable steps.\n\n" :
         currentMode === "Content" ? "You are a content creator assistant. Provide hooks, captions, and structure.\n\n" :
@@ -222,6 +308,9 @@
       return res.json();
     }
 
+    // ---------------------------
+    // Buttons
+    // ---------------------------
     document.getElementById("unlockBtn").onclick = async () => {
       const code = (inviteInput.value || "").trim().toUpperCase();
       if (!code) return showGate("Enter an invite code.");
@@ -231,7 +320,8 @@
         await validateInvite(code);
         localStorage.setItem(KEY_INVITE, code);
         showApp();
-        addBubble("Invite verified. What are we building today?", "ai");
+        renderHistory(code, currentMode);
+        toast("Invite verified ✅");
       } catch {
         showGate("That code didn’t work (or it’s expired).");
       }
@@ -247,11 +337,21 @@
       showGate("Invite removed.");
     };
 
+    document.getElementById("clearChatBtn").onclick = () => {
+      const invite = localStorage.getItem(KEY_INVITE);
+      if (!invite) return;
+      const ok = confirm(`Clear chat history for mode "${currentMode}"?`);
+      if (!ok) return;
+      clearHistory(invite, currentMode);
+      renderHistory(invite, currentMode);
+      toast("Chat cleared 🧼");
+    };
+
     async function handleSend() {
       const text = (msg.value || "").trim();
       if (!text) return;
-      msg.value = "";
 
+      msg.value = "";
       addBubble(text, "me");
       statusLine.textContent = "EXO is thinking…";
       addTyping();
@@ -263,8 +363,8 @@
         statusLine.textContent = "";
       } catch (e) {
         removeTyping();
-        statusLine.textContent = "Error: " + esc(e.message || "Request failed").slice(0, 120);
-        if ((e.message || "").toLowerCase().includes("invite")) {
+        statusLine.textContent = "Error: " + String(e.message || "Request failed").slice(0, 120);
+        if (String(e.message || "").toLowerCase().includes("invite")) {
           showGate("Invite rejected. Enter a valid code.");
         }
       }
@@ -275,20 +375,13 @@
       if (e.key === "Enter") handleSend();
     });
 
-    function toast(msgText){
-      const t = document.createElement("div");
-      t.className = "toast";
-      t.textContent = msgText;
-      document.body.appendChild(t);
-      setTimeout(()=>t.classList.add("show"), 10);
-      setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 250); }, 1200);
-    }
-
-    // boot
+    // ---------------------------
+    // Boot
+    // ---------------------------
     const existing = localStorage.getItem(KEY_INVITE);
     if (existing) {
       showApp();
-      addBubble("Welcome back. Pick a mode and ask away.", "ai");
+      renderHistory(existing, currentMode);
     } else {
       showGate("");
     }
