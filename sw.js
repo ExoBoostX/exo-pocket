@@ -1,4 +1,4 @@
-const CACHE_NAME = "boost-empire-v1";
+const CACHE_NAME = "boost-empire-v2";
 const ASSETS = [
   "./",
   "./index.html",

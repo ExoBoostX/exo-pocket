@@ -21,7 +21,7 @@
       <div class="logo">EXO</div>
       <div class="title">
         <h1>Boost Empire</h1>
-        <p class="sub">Build Your Growth Machine</p>
+        <p class="sub" id="userLine">Loading…</p>
       </div>
     </header>
 
@@ -44,31 +44,77 @@
     <section class="card">
       <h2>Upgrades</h2>
       <div class="upgradeList" id="upgradeList"></div>
+      <p class="hint">Progress auto-saves for this user on this device.</p>
+    </section>
+
+    <section class="card">
+      <h2>Profile</h2>
+      <div class="profileRow">
+        <button class="btnSmall" id="switchUserBtn">Switch User</button>
+        <button class="btnSmall" id="resetBtn">Reset This User</button>
+      </div>
+      <p class="hint">Each username has its own save slot.</p>
     </section>
 
   </main>
 
 <script>
+/* -------------------------
+   PWA + Service Worker
+------------------------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
 
+/* -------------------------
+   Per-user save system
+   - Saves locally per device
+   - Keyed by username
+------------------------- */
+const KEY_ACTIVE_USER = "be_active_user";
+const KEY_SAVE_PREFIX = "be_save_";
+
+/* -------------------------
+   Game State
+------------------------- */
+let activeUser = null;
 let coins = 0;
 let cps = 0;
 
-const upgrades = [
+const defaultUpgrades = () => ([
   { name: "Instagram Bot", cost: 50, power: 1, owned: 0 },
   { name: "TikTok Engine", cost: 200, power: 5, owned: 0 },
   { name: "Discord Blaster", cost: 500, power: 12, owned: 0 },
   { name: "AI Growth Core", cost: 1500, power: 35, owned: 0 },
   { name: "Viral Algorithm", cost: 5000, power: 100, owned: 0 }
-];
+]);
 
+let upgrades = defaultUpgrades();
+
+/* -------------------------
+   Elements
+------------------------- */
 const coinsEl = document.getElementById("coins");
 const cpsEl = document.getElementById("cps");
 const upgradeList = document.getElementById("upgradeList");
+const userLine = document.getElementById("userLine");
 
+/* -------------------------
+   Helpers
+------------------------- */
+function sanitizeName(name) {
+  return (name || "").trim().slice(0, 20);
+}
+
+function saveKeyForUser(user) {
+  return KEY_SAVE_PREFIX + user.toLowerCase();
+}
+
+/* -------------------------
+   UI
+------------------------- */
 function updateUI() {
   coinsEl.textContent = Math.floor(coins);
   cpsEl.textContent = cps;
+  userLine.textContent = `User: ${activeUser} • Auto-save: ON`;
   renderUpgrades();
 }
 
@@ -77,11 +123,18 @@ function renderUpgrades() {
     <button class="upgradeBtn" onclick="buyUpgrade(${i})">
       <div>
         <div class="rowTitle">${u.name}</div>
-        <div class="rowSub">Owned: ${u.owned}</div>
+        <div class="rowSub">Owned: ${u.owned} • +${u.power} cps</div>
       </div>
       <div class="rowRight">💰 ${u.cost}</div>
     </button>
   `).join("");
+}
+
+/* -------------------------
+   Game Logic
+------------------------- */
+function recalcCps() {
+  cps = upgrades.reduce((sum, u) => sum + (u.owned * u.power), 0);
 }
 
 function buyUpgrade(index) {
@@ -89,9 +142,11 @@ function buyUpgrade(index) {
   if (coins >= u.cost) {
     coins -= u.cost;
     u.owned++;
-    cps += u.power;
+    // price grows each buy
     u.cost = Math.floor(u.cost * 1.6);
+    recalcCps();
     updateUI();
+    saveNow();
   }
 }
 
@@ -100,12 +155,115 @@ document.getElementById("boostBtn").addEventListener("click", () => {
   updateUI();
 });
 
+/* -------------------------
+   Saving / Loading
+------------------------- */
+function saveNow() {
+  if (!activeUser) return;
+  const payload = {
+    v: 1,
+    t: Date.now(),
+    coins,
+    upgrades
+  };
+  try {
+    localStorage.setItem(saveKeyForUser(activeUser), JSON.stringify(payload));
+    localStorage.setItem(KEY_ACTIVE_USER, activeUser);
+  } catch (e) {
+    // storage full / blocked (rare)
+  }
+}
+
+function loadForUser(user) {
+  activeUser = user;
+  // default state
+  coins = 0;
+  upgrades = defaultUpgrades();
+  recalcCps();
+
+  const raw = localStorage.getItem(saveKeyForUser(user));
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      if (typeof data.coins === "number") coins = data.coins;
+
+      if (Array.isArray(data.upgrades)) {
+        // Merge safely by index (keeps future upgrade list changes stable)
+        const base = defaultUpgrades();
+        upgrades = base.map((b, i) => {
+          const u = data.upgrades[i];
+          return {
+            name: b.name,
+            power: b.power,
+            owned: (u && Number.isFinite(u.owned)) ? u.owned : 0,
+            cost: (u && Number.isFinite(u.cost)) ? u.cost : b.cost
+          };
+        });
+      }
+      recalcCps();
+    } catch (e) {
+      // if corrupted, start fresh
+      coins = 0;
+      upgrades = defaultUpgrades();
+      recalcCps();
+    }
+  }
+
+  updateUI();
+  saveNow(); // ensures active user persists
+}
+
+function promptForUser(existingName = "") {
+  const name = sanitizeName(prompt("Enter a username for this device:", existingName || "Guest"));
+  return name || "Guest";
+}
+
+function ensureUser() {
+  const savedUser = localStorage.getItem(KEY_ACTIVE_USER);
+  const user = savedUser ? sanitizeName(savedUser) : promptForUser("Guest");
+  loadForUser(user || "Guest");
+}
+
+/* -------------------------
+   Auto-save loops
+------------------------- */
+// Passive income tick
 setInterval(() => {
   coins += cps;
   updateUI();
 }, 1000);
 
-updateUI();
+// Auto-save every 5 seconds
+setInterval(() => {
+  saveNow();
+}, 5000);
+
+// Save when app goes background
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveNow();
+});
+window.addEventListener("beforeunload", saveNow);
+
+/* -------------------------
+   Profile Buttons
+------------------------- */
+document.getElementById("switchUserBtn").addEventListener("click", () => {
+  const newUser = promptForUser(activeUser || "Guest");
+  loadForUser(newUser);
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!activeUser) return;
+  const ok = confirm(`Reset progress for "${activeUser}"? This cannot be undone.`);
+  if (!ok) return;
+  localStorage.removeItem(saveKeyForUser(activeUser));
+  loadForUser(activeUser);
+});
+
+/* -------------------------
+   Start
+------------------------- */
+ensureUser();
 </script>
 
 </body>
