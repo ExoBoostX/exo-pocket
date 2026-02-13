@@ -31,11 +31,8 @@
         </div>
       </div>
 
-      <div class="chips" id="modeChips">
-        <button class="chip active" data-mode="Growth">Growth</button>
-        <button class="chip" data-mode="Content">Content</button>
-        <button class="chip" data-mode="Sales">Sales</button>
-        <button class="chip" data-mode="Support">Support</button>
+      <div class="heroActions">
+        <button class="btnSmall" id="togglePresetsBtn">Presets</button>
       </div>
     </header>
 
@@ -64,7 +61,7 @@
       <div class="appTop">
         <div class="pill">
           <span class="miniDot"></span>
-          <span id="pillMode">Mode: Growth</span>
+          <span id="pillText">Ready</span>
         </div>
 
         <div style="display:flex; gap:10px; align-items:center;">
@@ -73,21 +70,38 @@
         </div>
       </div>
 
+      <!-- Presets drawer -->
+      <div class="presetWrap hidden" id="presetWrap">
+        <div class="presetHeader">
+          <div class="presetTitle">Quick presets</div>
+          <button class="btnSmall" id="closePresetsBtn">Close</button>
+        </div>
+
+        <div class="presetGrid" id="presetGrid"></div>
+
+        <div class="hint presetHint">
+          Tip: pick a preset, then type your message normally.
+        </div>
+      </div>
+
       <div class="chat" id="chat"></div>
 
       <div class="composer">
-        <input id="msg" placeholder="Ask EXO…" />
-        <button class="send" id="sendBtn" aria-label="Send">
-          <span>Send</span>
-          <span class="sendArrow">➜</span>
-        </button>
+        <div class="presetLine" id="presetLine">Preset: <b>None</b></div>
+        <div class="composerRow">
+          <input id="msg" placeholder="Ask EXO…" />
+          <button class="send" id="sendBtn" aria-label="Send">
+            <span>Send</span>
+            <span class="sendArrow">➜</span>
+          </button>
+        </div>
       </div>
 
       <div class="statusLine" id="statusLine"></div>
     </section>
 
     <footer class="foot">
-      <small>Neon synthwave UI • Private access • Saved locally on device</small>
+      <small>Private access • Presets • Saved locally on device</small>
     </footer>
   </main>
 
@@ -97,81 +111,68 @@
     const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
 
     const KEY_INVITE = "exo_invite_code";
-    const KEY_MODE   = "exo_mode";
 
-    const gateCard   = document.getElementById("gateCard");
-    const appCard    = document.getElementById("appCard");
-    const inviteInput= document.getElementById("inviteInput");
-    const gateError  = document.getElementById("gateError");
-
-    const chat       = document.getElementById("chat");
-    const msg        = document.getElementById("msg");
-    const statusLine = document.getElementById("statusLine");
-    const pillMode   = document.getElementById("pillMode");
-    const modeChips  = document.getElementById("modeChips");
-
-    // ---------------------------
-    // Local chat history
-    // - Stored per invite code
-    // - Also stored per mode (optional but nice)
-    // ---------------------------
-    const HISTORY_MAX = 60; // total bubbles stored (me+ai)
-    function historyKey(invite, mode){
+    // History: per invite
+    const HISTORY_MAX = 80;
+    function historyKey(invite){
       const safeInvite = (invite || "none").toUpperCase().replace(/[^A-Z0-9\-]/g, "");
-      const safeMode = (mode || "Growth").replace(/[^A-Za-z]/g, "");
-      return `exo_chat_${safeInvite}_${safeMode}`;
+      return `exo_chat_${safeInvite}`;
     }
-
-    function loadHistory(invite, mode){
+    function loadHistory(invite){
       try {
-        const raw = localStorage.getItem(historyKey(invite, mode));
+        const raw = localStorage.getItem(historyKey(invite));
         const arr = raw ? JSON.parse(raw) : [];
         return Array.isArray(arr) ? arr : [];
-      } catch {
-        return [];
-      }
+      } catch { return []; }
     }
-
-    function saveHistory(invite, mode, arr){
+    function saveHistory(invite, arr){
       try {
-        const trimmed = arr.slice(-HISTORY_MAX);
-        localStorage.setItem(historyKey(invite, mode), JSON.stringify(trimmed));
+        localStorage.setItem(historyKey(invite), JSON.stringify(arr.slice(-HISTORY_MAX)));
       } catch {}
     }
-
-    function clearHistory(invite, mode){
-      try { localStorage.removeItem(historyKey(invite, mode)); } catch {}
+    function clearHistory(invite){
+      try { localStorage.removeItem(historyKey(invite)); } catch {}
     }
 
-    // ---------------------------
-    // Mode
-    // ---------------------------
-    let currentMode = localStorage.getItem(KEY_MODE) || "Growth";
+    // UI
+    const gateCard = document.getElementById("gateCard");
+    const appCard = document.getElementById("appCard");
+    const inviteInput = document.getElementById("inviteInput");
+    const gateError = document.getElementById("gateError");
 
-    function setMode(mode){
-      currentMode = mode;
-      localStorage.setItem(KEY_MODE, mode);
-      pillMode.textContent = `Mode: ${mode}`;
-      [...modeChips.querySelectorAll(".chip")]
-        .forEach(c => c.classList.toggle("active", c.dataset.mode === mode));
+    const chat = document.getElementById("chat");
+    const msg = document.getElementById("msg");
+    const statusLine = document.getElementById("statusLine");
+    const pillText = document.getElementById("pillText");
 
-      // If user is already inside, re-render history for that mode
-      const invite = localStorage.getItem(KEY_INVITE);
-      if (invite && !appCard.classList.contains("hidden")) {
-        renderHistory(invite, currentMode);
-      }
+    const presetWrap = document.getElementById("presetWrap");
+    const presetGrid = document.getElementById("presetGrid");
+    const presetLine = document.getElementById("presetLine");
+
+    // Presets (universal)
+    const PRESETS = [
+      { id:"none", label:"None", preface:"" },
+      { id:"explain", label:"Explain", preface:"Explain this clearly like I'm smart but new to it. Use an analogy and a simple example.\n\n" },
+      { id:"summarise", label:"Summarise", preface:"Summarise this into key bullet points. Then give a 1-sentence takeaway.\n\n" },
+      { id:"rewrite", label:"Rewrite", preface:"Rewrite this to be clearer and more polished. Keep the meaning the same.\n\n" },
+      { id:"brainstorm", label:"Brainstorm", preface:"Brainstorm 10 strong ideas. Make them varied and practical.\n\n" },
+      { id:"plan", label:"Plan", preface:"Create a step-by-step plan with milestones, time estimates, and next actions.\n\n" },
+      { id:"code", label:"Code help", preface:"Help me with this code. Explain the issue, then show a corrected version.\n\n" },
+      { id:"email", label:"Email", preface:"Draft a professional email. Provide 2 tone options (neutral + friendly).\n\n" },
+      { id:"study", label:"Study", preface:"Teach me this like a tutor: quick explanation, then 5 questions to test me.\n\n" }
+    ];
+
+    let activePreset = PRESETS[0]; // none
+
+    function setPreset(id){
+      activePreset = PRESETS.find(p => p.id === id) || PRESETS[0];
+      presetLine.innerHTML = `Preset: <b>${activePreset.label}</b>`;
+      pillText.textContent = activePreset.id === "none" ? "Ready" : `Preset: ${activePreset.label}`;
+      [...presetGrid.querySelectorAll(".presetBtn")].forEach(b => {
+        b.classList.toggle("active", b.dataset.pid === activePreset.id);
+      });
     }
-    setMode(currentMode);
 
-    modeChips.addEventListener("click", (e) => {
-      const b = e.target.closest(".chip");
-      if (!b) return;
-      setMode(b.dataset.mode);
-    });
-
-    // ---------------------------
-    // UI state
-    // ---------------------------
     function showGate(err="") {
       gateCard.classList.remove("hidden");
       appCard.classList.add("hidden");
@@ -193,9 +194,6 @@
       setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 250); }, 1200);
     }
 
-    // ---------------------------
-    // Bubbles
-    // ---------------------------
     function addBubble(text, who="ai", skipSave=false) {
       const wrap = document.createElement("div");
       wrap.className = `bubbleWrap ${who}`;
@@ -203,7 +201,6 @@
       const b = document.createElement("div");
       b.className = `bubble ${who}`;
       b.textContent = text;
-
       wrap.appendChild(b);
 
       if (who === "ai") {
@@ -225,13 +222,12 @@
       chat.appendChild(wrap);
       chat.scrollTop = chat.scrollHeight;
 
-      // Save to history
       if (!skipSave) {
         const invite = localStorage.getItem(KEY_INVITE) || "";
         if (invite) {
-          const hist = loadHistory(invite, currentMode);
+          const hist = loadHistory(invite);
           hist.push({ who, text, t: Date.now() });
-          saveHistory(invite, currentMode, hist);
+          saveHistory(invite, hist);
         }
       }
       return wrap;
@@ -250,28 +246,22 @@
       chat.appendChild(wrap);
       chat.scrollTop = chat.scrollHeight;
     }
-
     function removeTyping() {
       const t = document.getElementById("typing");
       if (t) t.remove();
     }
 
-    function renderHistory(invite, mode){
+    function renderHistory(invite){
       chat.innerHTML = "";
-      const hist = loadHistory(invite, mode);
-
+      const hist = loadHistory(invite);
       if (hist.length === 0) {
-        addBubble("Welcome back. Pick a mode and ask away.", "ai", true);
+        addBubble("Welcome. Use Presets if you want quick formatting — or just ask anything.", "ai", true);
         return;
       }
-
       hist.forEach(m => addBubble(m.text, m.who, true));
       chat.scrollTop = chat.scrollHeight;
     }
 
-    // ---------------------------
-    // API calls
-    // ---------------------------
     async function validateInvite(code) {
       const res = await fetch(API_BASE + "/validate", {
         method: "POST",
@@ -284,13 +274,7 @@
 
     async function sendToAI(promptText) {
       const code = localStorage.getItem(KEY_INVITE) || "";
-
-      // Mode steering (simple)
-      const preface =
-        currentMode === "Growth" ? "You are a growth strategist. Give actionable steps.\n\n" :
-        currentMode === "Content" ? "You are a content creator assistant. Provide hooks, captions, and structure.\n\n" :
-        currentMode === "Sales" ? "You are a sales assistant. Provide DM scripts, offers, and closing lines.\n\n" :
-        "You are a support assistant. Be clear, calm, and step-by-step.\n\n";
+      const finalPrompt = (activePreset.preface || "") + promptText;
 
       const res = await fetch(API_BASE + "/chat", {
         method: "POST",
@@ -298,7 +282,7 @@
           "Content-Type": "application/json",
           "X-Invite": code
         },
-        body: JSON.stringify({ prompt: preface + promptText })
+        body: JSON.stringify({ prompt: finalPrompt })
       });
 
       if (!res.ok) {
@@ -308,9 +292,31 @@
       return res.json();
     }
 
-    // ---------------------------
-    // Buttons
-    // ---------------------------
+    // Build preset UI
+    presetGrid.innerHTML = PRESETS.map(p => `
+      <button class="presetBtn ${p.id==="none" ? "active":""}" data-pid="${p.id}">
+        ${p.label}
+      </button>
+    `).join("");
+
+    presetGrid.addEventListener("click", (e) => {
+      const b = e.target.closest(".presetBtn");
+      if (!b) return;
+      setPreset(b.dataset.pid);
+      toast(`Preset: ${activePreset.label}`);
+    });
+
+    // Presets toggle
+    function togglePresets(force){
+      const show = typeof force === "boolean" ? force : presetWrap.classList.contains("hidden");
+      presetWrap.classList.toggle("hidden", !show);
+      if (show) presetWrap.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+
+    document.getElementById("togglePresetsBtn").onclick = () => togglePresets();
+    document.getElementById("closePresetsBtn").onclick = () => togglePresets(false);
+
+    // Gate buttons
     document.getElementById("unlockBtn").onclick = async () => {
       const code = (inviteInput.value || "").trim().toUpperCase();
       if (!code) return showGate("Enter an invite code.");
@@ -320,7 +326,7 @@
         await validateInvite(code);
         localStorage.setItem(KEY_INVITE, code);
         showApp();
-        renderHistory(code, currentMode);
+        renderHistory(code);
         toast("Invite verified ✅");
       } catch {
         showGate("That code didn’t work (or it’s expired).");
@@ -340,13 +346,14 @@
     document.getElementById("clearChatBtn").onclick = () => {
       const invite = localStorage.getItem(KEY_INVITE);
       if (!invite) return;
-      const ok = confirm(`Clear chat history for mode "${currentMode}"?`);
+      const ok = confirm("Clear chat history on this device?");
       if (!ok) return;
-      clearHistory(invite, currentMode);
-      renderHistory(invite, currentMode);
+      clearHistory(invite);
+      renderHistory(invite);
       toast("Chat cleared 🧼");
     };
 
+    // Send
     async function handleSend() {
       const text = (msg.value || "").trim();
       if (!text) return;
@@ -363,7 +370,7 @@
         statusLine.textContent = "";
       } catch (e) {
         removeTyping();
-        statusLine.textContent = "Error: " + String(e.message || "Request failed").slice(0, 120);
+        statusLine.textContent = "Error: " + String(e.message || "Request failed").slice(0, 140);
         if (String(e.message || "").toLowerCase().includes("invite")) {
           showGate("Invite rejected. Enter a valid code.");
         }
@@ -371,17 +378,14 @@
     }
 
     document.getElementById("sendBtn").onclick = handleSend;
-    msg.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") handleSend();
-    });
+    msg.addEventListener("keydown", (e) => { if (e.key === "Enter") handleSend(); });
 
-    // ---------------------------
     // Boot
-    // ---------------------------
+    setPreset("none");
     const existing = localStorage.getItem(KEY_INVITE);
     if (existing) {
       showApp();
-      renderHistory(existing, currentMode);
+      renderHistory(existing);
     } else {
       showGate("");
     }

@@ -290,3 +290,64 @@ body{
   font-weight:850;
 }
 .toast.show{opacity:1; transform: translateX(-50%) translateY(0);}
+.heroActions{
+  margin-top: 12px;
+  display:flex;
+  justify-content:flex-end;
+}
+
+.presetWrap{
+  border:1px solid rgba(210,120,255,.18);
+  background: rgba(255,255,255,.02);
+  border-radius: 18px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.presetHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom: 10px;
+}
+
+.presetTitle{
+  font-weight: 950;
+  font-size: 13px;
+  color: rgba(244,237,255,.9);
+}
+
+.presetGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+
+.presetBtn{
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(210,120,255,.18);
+  background: rgba(255,255,255,.03);
+  color: rgba(244,237,255,.9);
+  font-weight: 900;
+  font-size: 12px;
+  text-align:center;
+}
+.presetBtn.active{
+  background: rgba(120,0,255,.16);
+  box-shadow: 0 0 18px rgba(195,75,255,.12);
+}
+
+.presetHint{ margin-top: 10px; }
+
+.presetLine{
+  font-size: 12px;
+  color: rgba(244,237,255,.75);
+  margin: 0 0 8px;
+}
+
+.composerRow{
+  display:flex;
+  gap:10px;
+}
