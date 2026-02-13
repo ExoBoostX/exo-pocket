@@ -111,7 +111,7 @@
     const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
     const KEY_INVITE = "exo_invite_code";
 
-    // ✅ ONLY ONE PRESETS ARRAY (ExoBoostX)
+    // ✅ PRESETS (now includes Image Generator)
     const PRESETS = [
       { id:"none", label:"Normal", preface:"" },
 
@@ -134,7 +134,10 @@
         "Write promotional copy for ExoBoostX that is trustworthy and compliant. No spammy wording. Include a CTA.\n\n" },
 
       { id:"onboard", label:"New Customer Onboarding", preface:
-        "Create a short onboarding message for a new ExoBoostX customer: steps to order, what info is needed, expectations, and support contact.\n\n" }
+        "Create a short onboarding message for a new ExoBoostX customer: steps to order, what info is needed, expectations, and support contact.\n\n" },
+
+      // ✅ NEW: image output mode
+      { id:"image", label:"Image Generator", preface:"" }
     ];
 
     // History: per invite
@@ -245,6 +248,50 @@
       return wrap;
     }
 
+    // ✅ NEW: render image bubbles for image output
+    function addImageBubble(dataUrl) {
+      const wrap = document.createElement("div");
+      wrap.className = "bubbleWrap ai";
+
+      const b = document.createElement("div");
+      b.className = "bubble ai";
+
+      const img = document.createElement("img");
+      img.src = dataUrl;
+      img.alt = "Generated image";
+      img.style.width = "100%";
+      img.style.borderRadius = "14px";
+      img.style.display = "block";
+
+      b.appendChild(img);
+      wrap.appendChild(b);
+
+      const actions = document.createElement("div");
+      actions.className = "bubbleActions";
+
+      const copy = document.createElement("button");
+      copy.className = "act";
+      copy.textContent = "Copy";
+      copy.onclick = async () => {
+        try { await navigator.clipboard.writeText(dataUrl); toast("Copied ✅"); }
+        catch { toast("Copy blocked on iOS"); }
+      };
+
+      actions.appendChild(copy);
+      wrap.appendChild(actions);
+
+      chat.appendChild(wrap);
+      chat.scrollTop = chat.scrollHeight;
+
+      // (Optional) store in history as a short entry
+      const invite = localStorage.getItem(KEY_INVITE) || "";
+      if (invite) {
+        const hist = loadHistory(invite);
+        hist.push({ who: "ai", text: "[Image generated]", t: Date.now() });
+        saveHistory(invite, hist);
+      }
+    }
+
     function addTyping() {
       const wrap = document.createElement("div");
       wrap.className = "bubbleWrap ai";
@@ -284,11 +331,16 @@
       return res.json();
     }
 
+    // ✅ UPDATED: routes to /image when Image Generator preset is selected
     async function sendToAI(promptText) {
       const code = localStorage.getItem(KEY_INVITE) || "";
+
+      const isImage = activePreset.id === "image";
+      const endpoint = isImage ? "/image" : "/chat";
+
       const finalPrompt = (activePreset.preface || "") + promptText;
 
-      const res = await fetch(API_BASE + "/chat", {
+      const res = await fetch(API_BASE + endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -372,13 +424,20 @@
 
       msg.value = "";
       addBubble(text, "me");
-      statusLine.textContent = "ExoBoostX AI is thinking…";
+      statusLine.textContent = activePreset.id === "image" ? "Generating image…" : "ExoBoostX AI is thinking…";
       addTyping();
 
       try {
         const data = await sendToAI(text);
         removeTyping();
-        addBubble(data.answer || "(No answer returned)", "ai");
+
+        // ✅ If image route returned an image, show it
+        if (data.imageDataUrl) {
+          addImageBubble(data.imageDataUrl);
+        } else {
+          addBubble(data.answer || "(No answer returned)", "ai");
+        }
+
         statusLine.textContent = "";
       } catch (e) {
         removeTyping();
