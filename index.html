@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0014" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>EXO AI Assistant</title>
+  <title>ExoBoostX AI</title>
 
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css">
@@ -21,12 +21,12 @@
       <div class="brand">
         <div class="mark">EXO</div>
         <div class="brandText">
-          <div class="brandTitle">EXO AI Assistant</div>
+          <div class="brandTitle">ExoBoostX AI</div>
           <div class="brandSub">
             <span class="dotLive"></span>
             <span id="liveText">Online</span>
             <span class="sep">•</span>
-            Invite-only Beta
+            Invite-only Bot
           </div>
         </div>
       </div>
@@ -73,7 +73,7 @@
       <!-- Presets drawer -->
       <div class="presetWrap hidden" id="presetWrap">
         <div class="presetHeader">
-          <div class="presetTitle">Quick presets</div>
+          <div class="presetTitle">ExoBoostX presets</div>
           <button class="btnSmall" id="closePresetsBtn">Close</button>
         </div>
 
@@ -87,9 +87,9 @@
       <div class="chat" id="chat"></div>
 
       <div class="composer">
-        <div class="presetLine" id="presetLine">Preset: <b>None</b></div>
+        <div class="presetLine" id="presetLine">Preset: <b>Normal</b></div>
         <div class="composerRow">
-          <input id="msg" placeholder="Ask EXO…" />
+          <input id="msg" placeholder="Ask ExoBoostX AI…" />
           <button class="send" id="sendBtn" aria-label="Send">
             <span>Send</span>
             <span class="sendArrow">➜</span>
@@ -109,34 +109,33 @@
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
 
     const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
-
     const KEY_INVITE = "exo_invite_code";
 
-const PRESETS = [
-  { id:"none", label:"Normal", preface:"" },
+    // ✅ ONLY ONE PRESETS ARRAY (ExoBoostX)
+    const PRESETS = [
+      { id:"none", label:"Normal", preface:"" },
 
-  { id:"support", label:"Support Reply", preface:
-    "Write a helpful customer support reply for ExoBoostX. Be polite, clear, and reassure the customer. Ask 1–2 key questions if needed.\n\n" },
+      { id:"support", label:"Support Reply", preface:
+        "Write a helpful customer support reply for ExoBoostX. Be polite, clear, and reassure the customer. Ask 1–2 key questions if needed.\n\n" },
 
-  { id:"service", label:"Service Explainer", preface:
-    "Explain the ExoBoostX service in a clear, trustworthy way (what it is, what the customer provides, what they receive, typical delivery expectations). Avoid making unrealistic promises.\n\n" },
+      { id:"service", label:"Service Explainer", preface:
+        "Explain the ExoBoostX service in a clear, trustworthy way (what it is, what the customer provides, what they receive, typical delivery expectations). Avoid making unrealistic promises.\n\n" },
 
-  { id:"discord", label:"Discord Post", preface:
-    "Write a Discord-ready post for ExoBoostX using clean formatting (headings, bullets, emojis). Keep it short and professional.\n\n" },
+      { id:"discord", label:"Discord Post", preface:
+        "Write a Discord-ready post for ExoBoostX using clean formatting (headings, bullets, emojis). Keep it short and professional.\n\n" },
 
-  { id:"faq", label:"FAQ Answer", preface:
-    "Answer as ExoBoostX AI. Provide an FAQ-style response, include steps if relevant, and end with a quick next action.\n\n" },
+      { id:"faq", label:"FAQ Answer", preface:
+        "Answer as ExoBoostX AI. Provide an FAQ-style response, include steps if relevant, and end with a quick next action.\n\n" },
 
-  { id:"policy", label:"Policy/Refund", preface:
-    "Write a clear ExoBoostX policy message (refunds, delivery, replacements). Keep it fair, specific, and easy to understand.\n\n" },
+      { id:"policy", label:"Policy/Refund", preface:
+        "Write a clear ExoBoostX policy message (refunds, delivery, replacements). Keep it fair, specific, and easy to understand.\n\n" },
 
-  { id:"offer", label:"Offer Copy", preface:
-    "Write promotional copy for ExoBoostX that is trustworthy and compliant. No spammy wording. Include a CTA.\n\n" },
+      { id:"offer", label:"Offer Copy", preface:
+        "Write promotional copy for ExoBoostX that is trustworthy and compliant. No spammy wording. Include a CTA.\n\n" },
 
-  { id:"onboard", label:"New Customer Onboarding", preface:
-    "Create a short onboarding message for a new ExoBoostX customer: steps to order, what info is needed, expectations, and support contact.\n\n" }
-];
-
+      { id:"onboard", label:"New Customer Onboarding", preface:
+        "Create a short onboarding message for a new ExoBoostX customer: steps to order, what info is needed, expectations, and support contact.\n\n" }
+    ];
 
     // History: per invite
     const HISTORY_MAX = 80;
@@ -175,20 +174,7 @@ const PRESETS = [
     const presetGrid = document.getElementById("presetGrid");
     const presetLine = document.getElementById("presetLine");
 
-    // Presets (universal)
-    const PRESETS = [
-      { id:"none", label:"None", preface:"" },
-      { id:"explain", label:"Explain", preface:"Explain this clearly like I'm smart but new to it. Use an analogy and a simple example.\n\n" },
-      { id:"summarise", label:"Summarise", preface:"Summarise this into key bullet points. Then give a 1-sentence takeaway.\n\n" },
-      { id:"rewrite", label:"Rewrite", preface:"Rewrite this to be clearer and more polished. Keep the meaning the same.\n\n" },
-      { id:"brainstorm", label:"Brainstorm", preface:"Brainstorm 10 strong ideas. Make them varied and practical.\n\n" },
-      { id:"plan", label:"Plan", preface:"Create a step-by-step plan with milestones, time estimates, and next actions.\n\n" },
-      { id:"code", label:"Code help", preface:"Help me with this code. Explain the issue, then show a corrected version.\n\n" },
-      { id:"email", label:"Email", preface:"Draft a professional email. Provide 2 tone options (neutral + friendly).\n\n" },
-      { id:"study", label:"Study", preface:"Teach me this like a tutor: quick explanation, then 5 questions to test me.\n\n" }
-    ];
-
-    let activePreset = PRESETS[0]; // none
+    let activePreset = PRESETS[0];
 
     function setPreset(id){
       activePreset = PRESETS.find(p => p.id === id) || PRESETS[0];
@@ -281,7 +267,7 @@ const PRESETS = [
       chat.innerHTML = "";
       const hist = loadHistory(invite);
       if (hist.length === 0) {
-        addBubble("Welcome. Use Presets if you want quick formatting — or just ask anything.", "ai", true);
+        addBubble("Welcome to ExoBoostX AI. Use Presets for quick replies — or just ask anything.", "ai", true);
         return;
       }
       hist.forEach(m => addBubble(m.text, m.who, true));
@@ -386,7 +372,7 @@ const PRESETS = [
 
       msg.value = "";
       addBubble(text, "me");
-      statusLine.textContent = "EXO is thinking…";
+      statusLine.textContent = "ExoBoostX AI is thinking…";
       addTyping();
 
       try {
