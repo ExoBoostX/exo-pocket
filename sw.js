@@ -1,4 +1,4 @@
-const CACHE_NAME = "exo-ai-presets-v3";
+const CACHE_NAME = "exo-ai-presets-v4";
 const ASSETS = ["./","./index.html","./style.css","./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

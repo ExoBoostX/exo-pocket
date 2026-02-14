@@ -111,7 +111,7 @@
     const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
     const KEY_INVITE = "exo_invite_code";
 
-    // ✅ PRESETS (now includes Image Generator)
+    // ✅ PRESETS (includes Image Generator)
     const PRESETS = [
       { id:"none", label:"Normal", preface:"" },
 
@@ -136,7 +136,6 @@
       { id:"onboard", label:"New Customer Onboarding", preface:
         "Create a short onboarding message for a new ExoBoostX customer: steps to order, what info is needed, expectations, and support contact.\n\n" },
 
-      // ✅ NEW: image output mode
       { id:"image", label:"Image Generator", preface:"" }
     ];
 
@@ -209,13 +208,107 @@
       setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 250); }, 1200);
     }
 
+    // ---------- Markdown-ish rendering (safe, no external libs) ----------
+    function escapeHtml(s){
+      return (s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function linkify(s){
+      // https://example.com -> clickable link
+      return s.replace(/(https?:\/\/[^\s<]+)/g, (m) => {
+        const safe = m.replace(/"/g, "%22");
+        return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${m}</a>`;
+      });
+    }
+
+    function renderMarkdown(raw){
+      const src = raw || "";
+
+      // Pull out fenced code blocks first
+      const blocks = [];
+      let text = src.replace(/```([\s\S]*?)```/g, (_, code) => {
+        const i = blocks.length;
+        blocks.push(code);
+        return `@@CODEBLOCK_${i}@@`;
+      });
+
+      // Escape everything (prevents HTML injection)
+      text = escapeHtml(text);
+
+      // Basic formatting
+      text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      text = text.replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "$1<em>$2</em>");
+      text = text.replace(/`(.+?)`/g, "<code>$1</code>");
+
+      // Headings (#, ##, ###) line-based
+      text = text.replace(/^###\s(.+)$/gm, "<div class=\"md-h3\">$1</div>");
+      text = text.replace(/^##\s(.+)$/gm, "<div class=\"md-h2\">$1</div>");
+      text = text.replace(/^#\s(.+)$/gm, "<div class=\"md-h1\">$1</div>");
+
+      // Bullets: consecutive lines starting with "- " or "* "
+      // We'll convert them into <ul> blocks.
+      const lines = text.split("\n");
+      let out = [];
+      let inList = false;
+
+      for (const line of lines) {
+        const m = line.match(/^\s*[-*]\s+(.*)$/);
+        if (m) {
+          if (!inList) { out.push("<ul>"); inList = true; }
+          out.push(`<li>${m[1]}</li>`);
+        } else {
+          if (inList) { out.push("</ul>"); inList = false; }
+          out.push(line);
+        }
+      }
+      if (inList) out.push("</ul>");
+      text = out.join("\n");
+
+      // Newlines -> <br> (but keep lists readable)
+      text = text.replace(/\n/g, "<br>");
+
+      // Linkify after formatting
+      text = linkify(text);
+
+      // Put code blocks back in (escaped already)
+      text = text.replace(/@@CODEBLOCK_(\d+)@@/g, (_, idx) => {
+        const code = escapeHtml(blocks[Number(idx)] || "");
+        return `<pre><code>${code}</code></pre>`;
+      });
+
+      return text;
+    }
+
+    function discordFormat(raw){
+      // For now: keep raw markdown, but normalize bullets
+      // • and – -> -
+      return (raw || "")
+        .replace(/^[\s]*[•–]\s+/gm, "- ")
+        .trim();
+    }
+    // -------------------------------------------------------
+
     function addBubble(text, who="ai", skipSave=false) {
       const wrap = document.createElement("div");
       wrap.className = `bubbleWrap ${who}`;
 
       const b = document.createElement("div");
       b.className = `bubble ${who}`;
-      b.textContent = text;
+
+      if (who === "ai") {
+        // Render markdown for AI
+        b.innerHTML = renderMarkdown(text);
+        b.dataset.raw = text; // keep raw for copying
+      } else {
+        // User messages stay plain
+        b.textContent = text;
+      }
+
       wrap.appendChild(b);
 
       if (who === "ai") {
@@ -230,7 +323,16 @@
           catch { toast("Copy blocked on iOS"); }
         };
 
+        const discord = document.createElement("button");
+        discord.className = "act";
+        discord.textContent = "Discord";
+        discord.onclick = async () => {
+          try { await navigator.clipboard.writeText(discordFormat(text)); toast("Discord copy ✅"); }
+          catch { toast("Copy blocked on iOS"); }
+        };
+
         actions.appendChild(copy);
+        actions.appendChild(discord);
         wrap.appendChild(actions);
       }
 
@@ -248,7 +350,7 @@
       return wrap;
     }
 
-    // ✅ NEW: render image bubbles for image output
+    // Image bubble for image output
     function addImageBubble(dataUrl) {
       const wrap = document.createElement("div");
       wrap.className = "bubbleWrap ai";
@@ -283,7 +385,7 @@
       chat.appendChild(wrap);
       chat.scrollTop = chat.scrollHeight;
 
-      // (Optional) store in history as a short entry
+      // store a short marker in history
       const invite = localStorage.getItem(KEY_INVITE) || "";
       if (invite) {
         const hist = loadHistory(invite);
@@ -331,7 +433,7 @@
       return res.json();
     }
 
-    // ✅ UPDATED: routes to /image when Image Generator preset is selected
+    // Routes to /image when Image Generator is selected
     async function sendToAI(promptText) {
       const code = localStorage.getItem(KEY_INVITE) || "";
 
@@ -431,7 +533,6 @@
         const data = await sendToAI(text);
         removeTyping();
 
-        // ✅ If image route returned an image, show it
         if (data.imageDataUrl) {
           addImageBubble(data.imageDataUrl);
         } else {
