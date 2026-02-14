@@ -15,10 +15,41 @@
   <div class="bg"></div>
   <div class="gridGlow"></div>
 
+  <!-- Sidebar overlay -->
+  <div class="sideOverlay hidden" id="sideOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar hidden" id="sidebar">
+    <div class="sideTop">
+      <div class="sideBrand">
+        <div class="sideMark">EXO</div>
+        <div>
+          <div class="sideTitle">Chats</div>
+          <div class="sideSub">Saved locally (per invite)</div>
+        </div>
+      </div>
+
+      <button class="btnSmall" id="closeSidebarBtn">Close</button>
+    </div>
+
+    <div class="sideActions">
+      <button class="btnPrimary" id="newChatBtn">+ New chat</button>
+      <button class="btnGhost" id="exportAllBtn">Export all</button>
+    </div>
+
+    <div class="chatList" id="chatList"></div>
+
+    <div class="sideFoot">
+      <small>Tip: tap a chat to open • long-press title area = rename</small>
+    </div>
+  </aside>
+
   <main class="wrap">
 
     <header class="hero">
       <div class="brand">
+        <button class="menuBtn" id="openSidebarBtn" aria-label="Open chats">☰</button>
+
         <div class="mark">EXO</div>
         <div class="brandText">
           <div class="brandTitle">ExoBoostX AI</div>
@@ -70,6 +101,15 @@
         </div>
       </div>
 
+      <!-- Current chat title line -->
+      <div class="chatHeaderLine">
+        <div class="chatHeaderLeft">
+          <div class="chatHeaderTitle" id="currentChatTitle">New chat</div>
+          <div class="chatHeaderMeta" id="currentChatMeta">Local • per invite</div>
+        </div>
+        <button class="btnSmall" id="renameChatBtn">Rename</button>
+      </div>
+
       <!-- Presets drawer -->
       <div class="presetWrap hidden" id="presetWrap">
         <div class="presetHeader">
@@ -101,7 +141,7 @@
     </section>
 
     <footer class="foot">
-      <small>Private access • Presets • Saved locally on device</small>
+      <small>Private access • Chats sidebar • Presets • Saved locally on device</small>
     </footer>
   </main>
 
@@ -111,7 +151,7 @@
     const API_BASE = "https://exo-ai-invite.exoware312.workers.dev";
     const KEY_INVITE = "exo_invite_code";
 
-    // ✅ PRESETS (includes Image Generator)
+    // ✅ Presets (includes Image Generator)
     const PRESETS = [
       { id:"none", label:"Normal", preface:"" },
 
@@ -139,35 +179,259 @@
       { id:"image", label:"Image Generator", preface:"" }
     ];
 
-    // History: per invite
-    const HISTORY_MAX = 80;
-    function historyKey(invite){
-      const safeInvite = (invite || "none").toUpperCase().replace(/[^A-Z0-9\-]/g, "");
-      return `exo_chat_${safeInvite}`;
-    }
-    function loadHistory(invite){
-      try {
-        const raw = localStorage.getItem(historyKey(invite));
-        const arr = raw ? JSON.parse(raw) : [];
-        return Array.isArray(arr) ? arr : [];
-      } catch { return []; }
-    }
-    function saveHistory(invite, arr){
-      try {
-        localStorage.setItem(historyKey(invite), JSON.stringify(arr.slice(-HISTORY_MAX)));
-      } catch {}
-    }
-    function clearHistory(invite){
-      try { localStorage.removeItem(historyKey(invite)); } catch {}
+    // ---------- Simple toast ----------
+    function toast(msgText){
+      const t = document.createElement("div");
+      t.className = "toast";
+      t.textContent = msgText;
+      document.body.appendChild(t);
+      setTimeout(()=>t.classList.add("show"), 10);
+      setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 250); }, 1200);
     }
 
-    // UI
+    // ---------- Markdown-ish rendering (safe, no libs) ----------
+    function escapeHtml(s){
+      return (s || "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+    function linkify(s){
+      return s.replace(/(https?:\/\/[^\s<]+)/g, (m) => {
+        const safe = m.replace(/"/g, "%22");
+        return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${m}</a>`;
+      });
+    }
+    function renderMarkdown(raw){
+      const src = raw || "";
+
+      const blocks = [];
+      let text = src.replace(/```([\s\S]*?)```/g, (_, code) => {
+        const i = blocks.length;
+        blocks.push(code);
+        return `@@CODEBLOCK_${i}@@`;
+      });
+
+      text = escapeHtml(text);
+      text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      text = text.replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "$1<em>$2</em>");
+      text = text.replace(/`(.+?)`/g, "<code>$1</code>");
+
+      text = text.replace(/^###\s(.+)$/gm, "<div class=\"md-h3\">$1</div>");
+      text = text.replace(/^##\s(.+)$/gm, "<div class=\"md-h2\">$1</div>");
+      text = text.replace(/^#\s(.+)$/gm, "<div class=\"md-h1\">$1</div>");
+
+      const lines = text.split("\n");
+      let out = [];
+      let inList = false;
+
+      for (const line of lines) {
+        const m = line.match(/^\s*[-*]\s+(.*)$/);
+        if (m) {
+          if (!inList) { out.push("<ul>"); inList = true; }
+          out.push(`<li>${m[1]}</li>`);
+        } else {
+          if (inList) { out.push("</ul>"); inList = false; }
+          out.push(line);
+        }
+      }
+      if (inList) out.push("</ul>");
+      text = out.join("\n");
+
+      text = text.replace(/\n/g, "<br>");
+      text = linkify(text);
+
+      text = text.replace(/@@CODEBLOCK_(\d+)@@/g, (_, idx) => {
+        const code = escapeHtml(blocks[Number(idx)] || "");
+        return `<pre><code>${code}</code></pre>`;
+      });
+
+      return text;
+    }
+    function discordFormat(raw){
+      return (raw || "")
+        .replace(/^[\s]*[•–]\s+/gm, "- ")
+        .trim();
+    }
+
+    // ---------- Chat sessions store (ChatGPT-style) ----------
+    function safeInvite(invite){
+      return (invite || "none").toUpperCase().replace(/[^A-Z0-9\-]/g, "");
+    }
+    function storeKey(invite){
+      return `exo_sessions_${safeInvite(invite)}`;
+    }
+    function newId(){
+      return Math.random().toString(36).slice(2, 10) + "-" + Date.now().toString(36);
+    }
+    function defaultTitle(){
+      return "New chat";
+    }
+    function now(){ return Date.now(); }
+
+    function loadStore(invite){
+      try {
+        const raw = localStorage.getItem(storeKey(invite));
+        const data = raw ? JSON.parse(raw) : null;
+        if (!data || typeof data !== "object") return null;
+        if (!Array.isArray(data.chats)) data.chats = [];
+        return data;
+      } catch { return null; }
+    }
+    function saveStore(invite, data){
+      try { localStorage.setItem(storeKey(invite), JSON.stringify(data)); } catch {}
+    }
+    function ensureStore(invite){
+      let s = loadStore(invite);
+      if (!s) {
+        const id = newId();
+        s = {
+          currentChatId: id,
+          chats: [{
+            id,
+            title: defaultTitle(),
+            createdAt: now(),
+            updatedAt: now(),
+            messages: []
+          }]
+        };
+        saveStore(invite, s);
+      }
+      // Ensure current exists
+      if (!s.chats.find(c => c.id === s.currentChatId)) {
+        if (s.chats.length === 0) {
+          const id = newId();
+          s.chats.push({ id, title: defaultTitle(), createdAt: now(), updatedAt: now(), messages: [] });
+          s.currentChatId = id;
+        } else {
+          s.currentChatId = s.chats[0].id;
+        }
+        saveStore(invite, s);
+      }
+      return s;
+    }
+
+    function getCurrentChat(invite){
+      const s = ensureStore(invite);
+      return s.chats.find(c => c.id === s.currentChatId);
+    }
+
+    function setCurrentChat(invite, chatId){
+      const s = ensureStore(invite);
+      if (!s.chats.find(c => c.id === chatId)) return;
+      s.currentChatId = chatId;
+      saveStore(invite, s);
+    }
+
+    function createChat(invite){
+      const s = ensureStore(invite);
+      const id = newId();
+      s.chats.unshift({
+        id,
+        title: defaultTitle(),
+        createdAt: now(),
+        updatedAt: now(),
+        messages: []
+      });
+      s.currentChatId = id;
+      saveStore(invite, s);
+      return id;
+    }
+
+    function deleteChat(invite, chatId){
+      const s = ensureStore(invite);
+      s.chats = s.chats.filter(c => c.id !== chatId);
+      if (s.chats.length === 0) {
+        const id = newId();
+        s.chats.push({ id, title: defaultTitle(), createdAt: now(), updatedAt: now(), messages: [] });
+        s.currentChatId = id;
+      } else if (s.currentChatId === chatId) {
+        s.currentChatId = s.chats[0].id;
+      }
+      saveStore(invite, s);
+    }
+
+    function renameChat(invite, chatId, title){
+      const s = ensureStore(invite);
+      const c = s.chats.find(x => x.id === chatId);
+      if (!c) return;
+      c.title = (title || "").trim().slice(0, 48) || defaultTitle();
+      c.updatedAt = now();
+      saveStore(invite, s);
+    }
+
+    function clearCurrentChat(invite){
+      const s = ensureStore(invite);
+      const c = s.chats.find(x => x.id === s.currentChatId);
+      if (!c) return;
+      c.messages = [];
+      c.updatedAt = now();
+      c.title = defaultTitle();
+      saveStore(invite, s);
+    }
+
+    function autoTitleFromFirstUserMessage(invite, chatId){
+      const s = ensureStore(invite);
+      const c = s.chats.find(x => x.id === chatId);
+      if (!c) return;
+
+      // Only auto-title if it's still default and we have a first user message
+      if (c.title !== defaultTitle()) return;
+      const firstUser = c.messages.find(m => m.who === "me" && m.text && m.text.trim());
+      if (!firstUser) return;
+
+      const t = firstUser.text.trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 36);
+
+      c.title = t.length ? t : defaultTitle();
+      c.updatedAt = now();
+      saveStore(invite, s);
+    }
+
+    function exportChatText(chat){
+      const lines = [];
+      lines.push(`# ${chat.title}`);
+      lines.push(`Created: ${new Date(chat.createdAt).toLocaleString()}`);
+      lines.push(`Updated: ${new Date(chat.updatedAt).toLocaleString()}`);
+      lines.push("");
+      for (const m of chat.messages) {
+        const who = m.who === "me" ? "You" : (m.who === "ai" ? "ExoBoostX AI" : m.who);
+        lines.push(`${who}:`);
+        lines.push(m.text || "");
+        lines.push("");
+      }
+      return lines.join("\n");
+    }
+
+    function downloadTextFile(filename, text){
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportAllChats(invite){
+      const s = ensureStore(invite);
+      const pack = s.chats.map(c => exportChatText(c)).join("\n\n---\n\n");
+      const fn = `ExoBoostXAI_AllChats_${safeInvite(invite)}.txt`;
+      downloadTextFile(fn, pack);
+    }
+
+    // ---------- UI refs ----------
     const gateCard = document.getElementById("gateCard");
     const appCard = document.getElementById("appCard");
     const inviteInput = document.getElementById("inviteInput");
     const gateError = document.getElementById("gateError");
 
-    const chat = document.getElementById("chat");
+    const chatEl = document.getElementById("chat");
     const msg = document.getElementById("msg");
     const statusLine = document.getElementById("statusLine");
     const pillText = document.getElementById("pillText");
@@ -175,6 +439,13 @@
     const presetWrap = document.getElementById("presetWrap");
     const presetGrid = document.getElementById("presetGrid");
     const presetLine = document.getElementById("presetLine");
+
+    const sidebar = document.getElementById("sidebar");
+    const sideOverlay = document.getElementById("sideOverlay");
+    const chatList = document.getElementById("chatList");
+
+    const currentChatTitle = document.getElementById("currentChatTitle");
+    const currentChatMeta = document.getElementById("currentChatMeta");
 
     let activePreset = PRESETS[0];
 
@@ -199,99 +470,130 @@
       statusLine.textContent = "";
     }
 
-    function toast(msgText){
-      const t = document.createElement("div");
-      t.className = "toast";
-      t.textContent = msgText;
-      document.body.appendChild(t);
-      setTimeout(()=>t.classList.add("show"), 10);
-      setTimeout(()=>{ t.classList.remove("show"); setTimeout(()=>t.remove(), 250); }, 1200);
+    // Sidebar open/close
+    function openSidebar(){
+      sidebar.classList.remove("hidden");
+      sideOverlay.classList.remove("hidden");
+    }
+    function closeSidebar(){
+      sidebar.classList.add("hidden");
+      sideOverlay.classList.add("hidden");
     }
 
-    // ---------- Markdown-ish rendering (safe, no external libs) ----------
-    function escapeHtml(s){
-      return (s || "")
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
+    // ---------- Render chats list ----------
+    function renderChatList(invite){
+      const s = ensureStore(invite);
+      const cur = s.currentChatId;
+
+      chatList.innerHTML = "";
+      s.chats
+        .sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0))
+        .forEach(c => {
+          const row = document.createElement("div");
+          row.className = "chatRow" + (c.id === cur ? " active" : "");
+          row.dataset.cid = c.id;
+
+          const left = document.createElement("div");
+          left.className = "chatRowLeft";
+
+          const t = document.createElement("div");
+          t.className = "chatRowTitle";
+          t.textContent = c.title || defaultTitle();
+
+          const meta = document.createElement("div");
+          meta.className = "chatRowMeta";
+          const d = new Date(c.updatedAt || c.createdAt || now());
+          meta.textContent = d.toLocaleString();
+
+          left.appendChild(t);
+          left.appendChild(meta);
+
+          const menu = document.createElement("button");
+          menu.className = "chatRowMenu";
+          menu.textContent = "⋯";
+          menu.title = "Chat actions";
+
+          // Actions menu
+          menu.onclick = (e) => {
+            e.stopPropagation();
+            const choice = prompt(
+              "Type: rename / export / delete",
+              "rename"
+            );
+            if (!choice) return;
+            const cmd = choice.trim().toLowerCase();
+
+            if (cmd === "rename") {
+              const newName = prompt("New chat name:", c.title || defaultTitle());
+              if (newName !== null) {
+                renameChat(invite, c.id, newName);
+                renderChatList(invite);
+                updateHeader(invite);
+              }
+            } else if (cmd === "export") {
+              const txt = exportChatText(c);
+              downloadTextFile(`ExoBoostXAI_${(c.title||"chat").replace(/[^a-z0-9]+/gi,"_")}.txt`, txt);
+            } else if (cmd === "delete") {
+              const ok = confirm(`Delete "${c.title || defaultTitle()}"?`);
+              if (!ok) return;
+              deleteChat(invite, c.id);
+              renderChatList(invite);
+              renderCurrentChat(invite);
+              updateHeader(invite);
+            } else {
+              toast("Unknown action");
+            }
+          };
+
+          // Long-press on title to rename (mobile-friendly)
+          let pressTimer = null;
+          left.addEventListener("touchstart", () => {
+            pressTimer = setTimeout(() => {
+              const newName = prompt("Rename chat:", c.title || defaultTitle());
+              if (newName !== null) {
+                renameChat(invite, c.id, newName);
+                renderChatList(invite);
+                updateHeader(invite);
+              }
+            }, 550);
+          }, { passive: true });
+
+          left.addEventListener("touchend", () => {
+            if (pressTimer) clearTimeout(pressTimer);
+          });
+
+          row.appendChild(left);
+          row.appendChild(menu);
+
+          row.onclick = () => {
+            setCurrentChat(invite, c.id);
+            renderChatList(invite);
+            renderCurrentChat(invite);
+            updateHeader(invite);
+            closeSidebar();
+          };
+
+          chatList.appendChild(row);
+        });
     }
 
-    function linkify(s){
-      // https://example.com -> clickable link
-      return s.replace(/(https?:\/\/[^\s<]+)/g, (m) => {
-        const safe = m.replace(/"/g, "%22");
-        return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${m}</a>`;
-      });
+    function updateHeader(invite){
+      const c = getCurrentChat(invite);
+      currentChatTitle.textContent = c?.title || defaultTitle();
+      const d = new Date(c?.updatedAt || c?.createdAt || now());
+      currentChatMeta.textContent = `Updated ${d.toLocaleString()}`;
     }
 
-    function renderMarkdown(raw){
-      const src = raw || "";
-
-      // Pull out fenced code blocks first
-      const blocks = [];
-      let text = src.replace(/```([\s\S]*?)```/g, (_, code) => {
-        const i = blocks.length;
-        blocks.push(code);
-        return `@@CODEBLOCK_${i}@@`;
-      });
-
-      // Escape everything (prevents HTML injection)
-      text = escapeHtml(text);
-
-      // Basic formatting
-      text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-      text = text.replace(/(^|[^*])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "$1<em>$2</em>");
-      text = text.replace(/`(.+?)`/g, "<code>$1</code>");
-
-      // Headings (#, ##, ###) line-based
-      text = text.replace(/^###\s(.+)$/gm, "<div class=\"md-h3\">$1</div>");
-      text = text.replace(/^##\s(.+)$/gm, "<div class=\"md-h2\">$1</div>");
-      text = text.replace(/^#\s(.+)$/gm, "<div class=\"md-h1\">$1</div>");
-
-      // Bullets: consecutive lines starting with "- " or "* "
-      // We'll convert them into <ul> blocks.
-      const lines = text.split("\n");
-      let out = [];
-      let inList = false;
-
-      for (const line of lines) {
-        const m = line.match(/^\s*[-*]\s+(.*)$/);
-        if (m) {
-          if (!inList) { out.push("<ul>"); inList = true; }
-          out.push(`<li>${m[1]}</li>`);
-        } else {
-          if (inList) { out.push("</ul>"); inList = false; }
-          out.push(line);
-        }
-      }
-      if (inList) out.push("</ul>");
-      text = out.join("\n");
-
-      // Newlines -> <br> (but keep lists readable)
-      text = text.replace(/\n/g, "<br>");
-
-      // Linkify after formatting
-      text = linkify(text);
-
-      // Put code blocks back in (escaped already)
-      text = text.replace(/@@CODEBLOCK_(\d+)@@/g, (_, idx) => {
-        const code = escapeHtml(blocks[Number(idx)] || "");
-        return `<pre><code>${code}</code></pre>`;
-      });
-
-      return text;
+    // ---------- Messages rendering/saving ----------
+    function pushMessage(invite, who, text){
+      const s = ensureStore(invite);
+      const c = s.chats.find(x => x.id === s.currentChatId);
+      if (!c) return;
+      c.messages.push({ who, text, t: now() });
+      c.updatedAt = now();
+      saveStore(invite, s);
+      autoTitleFromFirstUserMessage(invite, c.id);
     }
-
-    function discordFormat(raw){
-      // For now: keep raw markdown, but normalize bullets
-      // • and – -> -
-      return (raw || "")
-        .replace(/^[\s]*[•–]\s+/gm, "- ")
-        .trim();
-    }
-    // -------------------------------------------------------
 
     function addBubble(text, who="ai", skipSave=false) {
       const wrap = document.createElement("div");
@@ -301,11 +603,9 @@
       b.className = `bubble ${who}`;
 
       if (who === "ai") {
-        // Render markdown for AI
         b.innerHTML = renderMarkdown(text);
-        b.dataset.raw = text; // keep raw for copying
+        b.dataset.raw = text;
       } else {
-        // User messages stay plain
         b.textContent = text;
       }
 
@@ -336,21 +636,16 @@
         wrap.appendChild(actions);
       }
 
-      chat.appendChild(wrap);
-      chat.scrollTop = chat.scrollHeight;
+      chatEl.appendChild(wrap);
+      chatEl.scrollTop = chatEl.scrollHeight;
 
       if (!skipSave) {
         const invite = localStorage.getItem(KEY_INVITE) || "";
-        if (invite) {
-          const hist = loadHistory(invite);
-          hist.push({ who, text, t: Date.now() });
-          saveHistory(invite, hist);
-        }
+        if (invite) pushMessage(invite, who, text);
       }
       return wrap;
     }
 
-    // Image bubble for image output
     function addImageBubble(dataUrl) {
       const wrap = document.createElement("div");
       wrap.className = "bubbleWrap ai";
@@ -382,16 +677,11 @@
       actions.appendChild(copy);
       wrap.appendChild(actions);
 
-      chat.appendChild(wrap);
-      chat.scrollTop = chat.scrollHeight;
+      chatEl.appendChild(wrap);
+      chatEl.scrollTop = chatEl.scrollHeight;
 
-      // store a short marker in history
       const invite = localStorage.getItem(KEY_INVITE) || "";
-      if (invite) {
-        const hist = loadHistory(invite);
-        hist.push({ who: "ai", text: "[Image generated]", t: Date.now() });
-        saveHistory(invite, hist);
-      }
+      if (invite) pushMessage(invite, "ai", "[Image generated]");
     }
 
     function addTyping() {
@@ -404,25 +694,49 @@
       b.innerHTML = `<span class="td"></span><span class="td"></span><span class="td"></span>`;
       wrap.appendChild(b);
 
-      chat.appendChild(wrap);
-      chat.scrollTop = chat.scrollHeight;
+      chatEl.appendChild(wrap);
+      chatEl.scrollTop = chatEl.scrollHeight;
     }
     function removeTyping() {
       const t = document.getElementById("typing");
       if (t) t.remove();
     }
 
-    function renderHistory(invite){
-      chat.innerHTML = "";
-      const hist = loadHistory(invite);
-      if (hist.length === 0) {
+    function renderCurrentChat(invite){
+      chatEl.innerHTML = "";
+      const c = getCurrentChat(invite);
+
+      if (!c || !Array.isArray(c.messages) || c.messages.length === 0) {
         addBubble("Welcome to ExoBoostX AI. Use Presets for quick replies — or just ask anything.", "ai", true);
         return;
       }
-      hist.forEach(m => addBubble(m.text, m.who, true));
-      chat.scrollTop = chat.scrollHeight;
+      c.messages.forEach(m => addBubble(m.text, m.who, true));
+      chatEl.scrollTop = chatEl.scrollHeight;
     }
 
+    // ---------- Presets UI ----------
+    presetGrid.innerHTML = PRESETS.map(p => `
+      <button class="presetBtn ${p.id==="none" ? "active":""}" data-pid="${p.id}">
+        ${p.label}
+      </button>
+    `).join("");
+
+    presetGrid.addEventListener("click", (e) => {
+      const b = e.target.closest(".presetBtn");
+      if (!b) return;
+      setPreset(b.dataset.pid);
+      toast(`Preset: ${activePreset.label}`);
+    });
+
+    function togglePresets(force){
+      const show = typeof force === "boolean" ? force : presetWrap.classList.contains("hidden");
+      presetWrap.classList.toggle("hidden", !show);
+      if (show) presetWrap.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+    document.getElementById("togglePresetsBtn").onclick = () => togglePresets();
+    document.getElementById("closePresetsBtn").onclick = () => togglePresets(false);
+
+    // ---------- Invite validate ----------
     async function validateInvite(code) {
       const res = await fetch(API_BASE + "/validate", {
         method: "POST",
@@ -433,13 +747,11 @@
       return res.json();
     }
 
-    // Routes to /image when Image Generator is selected
+    // ---------- API send ----------
     async function sendToAI(promptText) {
       const code = localStorage.getItem(KEY_INVITE) || "";
-
       const isImage = activePreset.id === "image";
       const endpoint = isImage ? "/image" : "/chat";
-
       const finalPrompt = (activePreset.preface || "") + promptText;
 
       const res = await fetch(API_BASE + endpoint, {
@@ -458,68 +770,7 @@
       return res.json();
     }
 
-    // Build preset UI
-    presetGrid.innerHTML = PRESETS.map(p => `
-      <button class="presetBtn ${p.id==="none" ? "active":""}" data-pid="${p.id}">
-        ${p.label}
-      </button>
-    `).join("");
-
-    presetGrid.addEventListener("click", (e) => {
-      const b = e.target.closest(".presetBtn");
-      if (!b) return;
-      setPreset(b.dataset.pid);
-      toast(`Preset: ${activePreset.label}`);
-    });
-
-    // Presets toggle
-    function togglePresets(force){
-      const show = typeof force === "boolean" ? force : presetWrap.classList.contains("hidden");
-      presetWrap.classList.toggle("hidden", !show);
-      if (show) presetWrap.scrollIntoView({behavior:"smooth", block:"start"});
-    }
-
-    document.getElementById("togglePresetsBtn").onclick = () => togglePresets();
-    document.getElementById("closePresetsBtn").onclick = () => togglePresets(false);
-
-    // Gate buttons
-    document.getElementById("unlockBtn").onclick = async () => {
-      const code = (inviteInput.value || "").trim().toUpperCase();
-      if (!code) return showGate("Enter an invite code.");
-
-      gateError.textContent = "Checking…";
-      try {
-        await validateInvite(code);
-        localStorage.setItem(KEY_INVITE, code);
-        showApp();
-        renderHistory(code);
-        toast("Invite verified ✅");
-      } catch {
-        showGate("That code didn’t work (or it’s expired).");
-      }
-    };
-
-    document.getElementById("clearBtn").onclick = () => {
-      inviteInput.value = "";
-      gateError.textContent = "";
-    };
-
-    document.getElementById("logoutBtn").onclick = () => {
-      localStorage.removeItem(KEY_INVITE);
-      showGate("Invite removed.");
-    };
-
-    document.getElementById("clearChatBtn").onclick = () => {
-      const invite = localStorage.getItem(KEY_INVITE);
-      if (!invite) return;
-      const ok = confirm("Clear chat history on this device?");
-      if (!ok) return;
-      clearHistory(invite);
-      renderHistory(invite);
-      toast("Chat cleared 🧼");
-    };
-
-    // Send
+    // ---------- Actions ----------
     async function handleSend() {
       const text = (msg.value || "").trim();
       if (!text) return;
@@ -540,24 +791,114 @@
         }
 
         statusLine.textContent = "";
+        // Update list ordering/time after each message
+        const invite = localStorage.getItem(KEY_INVITE) || "";
+        if (invite) {
+          renderChatList(invite);
+          updateHeader(invite);
+        }
       } catch (e) {
         removeTyping();
         statusLine.textContent = "Error: " + String(e.message || "Request failed").slice(0, 140);
-        if (String(e.message || "").toLowerCase().includes("invite")) {
-          showGate("Invite rejected. Enter a valid code.");
-        }
       }
     }
 
     document.getElementById("sendBtn").onclick = handleSend;
     msg.addEventListener("keydown", (e) => { if (e.key === "Enter") handleSend(); });
 
+    document.getElementById("clearChatBtn").onclick = () => {
+      const invite = localStorage.getItem(KEY_INVITE);
+      if (!invite) return;
+      const ok = confirm("Clear this chat only?");
+      if (!ok) return;
+      clearCurrentChat(invite);
+      renderCurrentChat(invite);
+      renderChatList(invite);
+      updateHeader(invite);
+      toast("Chat cleared 🧼");
+    };
+
+    document.getElementById("logoutBtn").onclick = () => {
+      localStorage.removeItem(KEY_INVITE);
+      closeSidebar();
+      showGate("Invite removed.");
+    };
+
+    // Sidebar buttons
+    document.getElementById("openSidebarBtn").onclick = () => {
+      const invite = localStorage.getItem(KEY_INVITE);
+      if (!invite) return toast("Enter an invite first");
+      renderChatList(invite);
+      openSidebar();
+    };
+    document.getElementById("closeSidebarBtn").onclick = closeSidebar;
+    document.getElementById("sideOverlay").onclick = closeSidebar;
+
+    document.getElementById("newChatBtn").onclick = () => {
+      const invite = localStorage.getItem(KEY_INVITE);
+      if (!invite) return;
+      createChat(invite);
+      renderChatList(invite);
+      renderCurrentChat(invite);
+      updateHeader(invite);
+      closeSidebar();
+      toast("New chat ✅");
+    };
+
+    document.getElementById("exportAllBtn").onclick = () => {
+      const invite = localStorage.getItem(KEY_INVITE);
+      if (!invite) return;
+      exportAllChats(invite);
+    };
+
+    document.getElementById("renameChatBtn").onclick = () => {
+      const invite = localStorage.getItem(KEY_INVITE);
+      if (!invite) return;
+      const c = getCurrentChat(invite);
+      const newName = prompt("Rename chat:", c?.title || defaultTitle());
+      if (newName !== null) {
+        renameChat(invite, c.id, newName);
+        renderChatList(invite);
+        updateHeader(invite);
+      }
+    };
+
+    // Gate buttons
+    document.getElementById("unlockBtn").onclick = async () => {
+      const code = (inviteInput.value || "").trim().toUpperCase();
+      if (!code) return showGate("Enter an invite code.");
+
+      gateError.textContent = "Checking…";
+      try {
+        await validateInvite(code);
+        localStorage.setItem(KEY_INVITE, code);
+
+        showApp();
+        ensureStore(code);
+        renderChatList(code);
+        renderCurrentChat(code);
+        updateHeader(code);
+
+        toast("Invite verified ✅");
+      } catch {
+        showGate("That code didn’t work (or it’s expired).");
+      }
+    };
+
+    document.getElementById("clearBtn").onclick = () => {
+      inviteInput.value = "";
+      gateError.textContent = "";
+    };
+
     // Boot
     setPreset("none");
     const existing = localStorage.getItem(KEY_INVITE);
     if (existing) {
       showApp();
-      renderHistory(existing);
+      ensureStore(existing);
+      renderChatList(existing);
+      renderCurrentChat(existing);
+      updateHeader(existing);
     } else {
       showGate("");
     }

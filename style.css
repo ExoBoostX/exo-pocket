@@ -387,3 +387,206 @@ body{
   align-items:center;
   justify-content:center;
 }
+
+/* ===== ChatGPT-style sidebar ===== */
+.menuBtn{
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid rgba(180,110,255,.22);
+  background: rgba(10,0,18,.55);
+  color: rgba(255,255,255,.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-right: 10px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.2) inset;
+}
+
+.sidebar{
+  position: fixed;
+  top: 0; left: 0;
+  width: min(360px, 88vw);
+  height: 100vh;
+  padding: 14px;
+  z-index: 9999;
+  background: rgba(6,0,12,.92);
+  backdrop-filter: blur(18px);
+  border-right: 1px solid rgba(180,110,255,.18);
+  box-shadow: 25px 0 60px rgba(0,0,0,.45);
+  display: flex;
+  flex-direction: column;
+}
+
+.sideOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(2px);
+}
+
+.sideTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+
+.sideBrand{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.sideMark{
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 900;
+  letter-spacing: .08em;
+  background: rgba(120,50,255,.22);
+  border: 1px solid rgba(180,110,255,.28);
+}
+
+.sideTitle{ font-weight: 900; font-size: 16px; }
+.sideSub{ opacity: .7; font-size: 12px; margin-top: 2px; }
+
+.sideActions{
+  display:flex;
+  gap: 10px;
+  margin: 12px 0 10px;
+}
+
+.chatList{
+  overflow:auto;
+  padding: 6px 0 10px;
+  display:flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chatRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(180,110,255,.16);
+  background: rgba(12, 0, 22, .45);
+  cursor: pointer;
+}
+
+.chatRow.active{
+  border-color: rgba(80, 255, 200, .35);
+  box-shadow: 0 0 0 1px rgba(80, 255, 200, .12) inset;
+}
+
+.chatRowLeft{
+  min-width: 0;
+  flex: 1;
+}
+
+.chatRowTitle{
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatRowMeta{
+  opacity: .7;
+  font-size: 11px;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatRowMenu{
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  border: 1px solid rgba(180,110,255,.18);
+  background: rgba(10,0,18,.55);
+  color: rgba(255,255,255,.92);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.sideFoot{
+  margin-top: auto;
+  padding-top: 10px;
+  opacity: .75;
+}
+
+/* Current chat header line */
+.chatHeaderLine{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin: 10px 0 6px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(180,110,255,.16);
+  background: rgba(12,0,22,.35);
+}
+
+.chatHeaderLeft{ min-width: 0; }
+.chatHeaderTitle{
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chatHeaderMeta{
+  opacity: .7;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Make sure action buttons show */
+.bubbleActions{
+  display:flex !important;
+  gap:10px !important;
+  flex-wrap:wrap !important;
+  margin-top:10px;
+}
+.bubbleActions .act{
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+}
+
+/* Markdown-ish rendering polish */
+.bubble a { text-decoration: underline; }
+.bubble code {
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(180,110,255,.25);
+  background: rgba(20, 0, 35, .55);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: .92em;
+}
+.bubble pre {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(180,110,255,.25);
+  background: rgba(10, 0, 18, .65);
+  overflow: auto;
+}
+.bubble pre code { border: none; background: transparent; padding: 0; }
+.md-h1 { font-size: 1.05em; font-weight: 800; margin: 8px 0 6px; }
+.md-h2 { font-size: 1.02em; font-weight: 800; margin: 8px 0 6px; }
+.md-h3 { font-size: 1.0em;  font-weight: 800; margin: 8px 0 6px; }
+.bubble ul { margin: 8px 0 0 18px; }
+.bubble li { margin: 4px 0; }
