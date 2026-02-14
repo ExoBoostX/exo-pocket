@@ -375,3 +375,15 @@ body{
 .md-h3 { font-size: 1.0em;  font-weight: 800; margin: 8px 0 6px; }
 .bubble ul { margin: 8px 0 0 18px; }
 .bubble li { margin: 4px 0; }
+
+.bubbleActions{
+  display:flex !important;
+  gap:10px !important;
+  flex-wrap:wrap !important;
+  margin-top:10px;
+}
+.bubbleActions .act{
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+}
