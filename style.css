@@ -590,3 +590,5 @@ body{
 .md-h3 { font-size: 1.0em;  font-weight: 800; margin: 8px 0 6px; }
 .bubble ul { margin: 8px 0 0 18px; }
 .bubble li { margin: 4px 0; }
+
+.hidden { display: none !important; }
